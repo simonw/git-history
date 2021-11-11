@@ -7,14 +7,11 @@ from pathlib import Path
 
 def iterate_file_versions(repo_path, filepath, ref="main"):
     relative_path = str(Path(filepath).relative_to(repo_path))
-    print(relative_path)
     repo = git.Repo(repo_path, odbt=git.GitDB)
     commits = reversed(list(repo.iter_commits(ref, paths=[relative_path])))
     for commit in commits:
         try:
-            print([b.name for b in commit.tree.blobs])
             blob = [b for b in commit.tree.blobs if b.name == relative_path][0]
-            print(blob)
             yield commit.committed_datetime, commit.hexsha, blob.data_stream.read()
         except IndexError:
             # This commit doesn't have a copy of the requested file
@@ -45,11 +42,23 @@ def cli(database, filepath, repo, branch):
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
     db = sqlite_utils.Database(database)
+    seen_hashes = set()
     for git_commit_at, git_hash, content in iterate_file_versions(
         resolved_repo, resolved_filepath, branch
     ):
+        if git_hash not in seen_hashes:
+            seen_hashes.add(git_hash)
+            db["commits"].insert(
+                {"hash": git_hash, "commit_at": git_commit_at.isoformat()},
+                pk="hash",
+                replace=True,
+            )
         items = json.loads(content)
         for item in items:
-            item["git_hash"] = git_hash
-            item["git_commit_at"] = git_commit_at.isoformat()
-        db["items"].insert_all(items, alter=True)
+            item["commit"] = git_hash
+        db["items"].insert_all(
+            items,
+            alter=True,
+            column_order=("commit",),
+            foreign_keys=(("commit", "commits", "hash"),),
+        )
