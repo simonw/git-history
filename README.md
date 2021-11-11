@@ -1,23 +1,38 @@
-# Template repository for creating new Python Click CLI tools
+# git-history
 
-This GitHub [template repository](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-on-github/creating-a-repository-from-a-template) can be used to create a new repository with the skeleton of a Python [Click](https://click.palletsprojects.com/) CLI tool, based on the [click-app](https://github.com/simonw/click-app) cookiecutter.
+[![PyPI](https://img.shields.io/pypi/v/git-history.svg)](https://pypi.org/project/git-history/)
+[![Changelog](https://img.shields.io/github/v/release/simonw/git-history?include_prereleases&label=changelog)](https://github.com/simonw/git-history/releases)
+[![Tests](https://github.com/simonw/git-history/workflows/Test/badge.svg)](https://github.com/simonw/git-history/actions?query=workflow%3ATest)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/simonw/git-history/blob/master/LICENSE)
 
-Start here: https://github.com/simonw/click-app-template-repository/generate
+Tool for analyzing the Git history of a specific file using SQLite
 
-The name of your repository will be the name of the CLI tool, and also the name of the Python package that you publish to [PyPI](https://pypi.org/) - so make sure that name is not taken already!
+## Installation
 
-Add a one-line description of your CLI tool, then click "Create repository from template".
+Install this tool using `pip`:
 
-![Screenshot of the create repository interface](https://user-images.githubusercontent.com/9599/131272183-d2f1bb50-1ca1-42f2-936d-f23a6cbdbe13.png)
+    $ pip install git-history
 
-Once created, your new repository will execute a GitHub Actions workflow that uses cookiecutter to rewrite the repository to the desired state. This make take 30 seconds or so.
+## Usage
 
-You can see an example of a repository generated using this template here:
+Usage instructions go here.
 
-- https://github.com/simonw/click-app-template-repository-demo
+## Development
 
-## Enabling workflows in your new repository
+To contribute to this tool, first checkout the code. Then create a new virtual environment:
 
-GitHub Actions like this are not allowed to create new workflows themselves.
+    cd git-history
+    python -m venv venv
+    source venv/bin/activate
 
-Your new repository will have a folder in it called `.github/rename-this-to-workflows` - rename that folder to `.github/workflows` to enable the `test.yml` and `publish.yml` workflows, which can then run tests for your tool and publish new GitHub releases to PyPI, as [described here](https://github.com/simonw/click-app#publishing-your-tool-to-github).
+Or if you are using `pipenv`:
+
+    pipenv shell
+
+Now install the dependencies and test dependencies:
+
+    pip install -e '.[test]'
+
+To run the tests:
+
+    pytest
