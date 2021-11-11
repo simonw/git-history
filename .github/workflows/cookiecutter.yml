@@ -1,0 +1,72 @@
+name: Run cookiecutter on first push
+
+on: [push]
+
+jobs:
+  run-cookiecutter:
+    if: ${{ github.repository != 'simonw/click-app-template-repository' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Install cookiecutter
+        run: pip3 install cookiecutter
+
+      - uses: actions/github-script@v4
+        id: fetch-repo-and-user-details
+        with:
+          script: |
+            const query = `query($owner:String!, $name:String!) {
+              repository(owner:$owner, name:$name) {
+                name
+                description
+                owner {
+                  login
+                  ... on User {
+                    name
+                  }
+                  ... on Organization {
+                    name
+                  }
+                }
+              }
+            }`;
+            const variables = {
+              owner: context.repo.owner,
+              name: context.repo.repo
+            }
+            const result = await github.graphql(query, variables)
+            console.log(result)
+            return result
+
+      - name: Rebuild contents using cookiecutter
+        env:
+          INFO: ${{ steps.fetch-repo-and-user-details.outputs.result }}
+        run: |
+          # Delete this workflow:
+          rm -rf .github
+          export REPO_NAME=$(echo $INFO | jq -r '.repository.name')
+          # Run cookiecutter
+          cookiecutter gh:simonw/click-app --no-input \
+            app_name=$REPO_NAME \
+            description="$(echo $INFO | jq -r .repository.description)" \
+            github_username="$(echo $INFO | jq -r .repository.owner.login)" \
+            author_name="$(echo $INFO | jq -r .repository.owner.name)"
+          # Move generated content to root directory of repo
+          mv $REPO_NAME/* .
+          # And .github and .gitignore too:
+          mv $REPO_NAME/.gitignore .
+          mv $REPO_NAME/.github .
+          # Actions are not allowed to create new actions - workaround:
+          mv .github/workflows .github/rename-this-to-workflows
+          # Now remove the empty datasette-x directory:
+          rmdir $REPO_NAME
+
+      - name: Force push new repo contents
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Initial plugin structure"
+          push_options: --force
