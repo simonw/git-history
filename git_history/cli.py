@@ -18,7 +18,14 @@ def iterate_file_versions(repo_path, filepath, ref="main"):
             pass
 
 
-@click.command()
+
+@click.group()
+@click.version_option()
+def cli():
+    "Tools for analyzing Git history using SQLite"
+
+
+@cli.command()
 @click.argument(
     "database",
     type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
@@ -37,8 +44,8 @@ def iterate_file_versions(repo_path, filepath, ref="main"):
 )
 @click.option("--branch", default="main", help="Git branch to use (defaults to main)")
 @click.version_option()
-def cli(database, filepath, repo, branch):
-    "Analyze the Git history of a specific file using SQLite"
+def file(database, filepath, repo, branch, ids):
+    "Analyze history of a specific file"
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
     db = sqlite_utils.Database(database)

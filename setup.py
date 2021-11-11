@@ -14,7 +14,7 @@ def get_long_description():
 
 setup(
     name="git-history",
-    description="Tool for analyzing the Git history of a specific file using SQLite",
+    description="Tools for analyzing Git history using SQLite",
     long_description=get_long_description(),
     long_description_content_type="text/markdown",
     author="Simon Willison",
