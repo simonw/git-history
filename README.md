@@ -15,7 +15,13 @@ Install this tool using `pip`:
 
 ## Usage
 
-Usage instructions go here.
+This assumes you have a JSON file that consists of an array of objects, and that has multiple versions stored away in the Git history, likely through [Git scraping](https://simonwillison.net/2020/Oct/9/git-scraping/).
+
+Most basic usage is:
+
+    git-convert database.db filename.json
+
+This will create a new SQLite database in the `database.db` file with an `item` table containing row for every item in every version of the `filename.json` file - with extra columns `git_commit_at` and `git_hash`.
 
 ## Development
 

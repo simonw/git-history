@@ -31,9 +31,7 @@ setup(
         [console_scripts]
         git-history=git_history.cli:cli
     """,
-    install_requires=["click"],
-    extras_require={
-        "test": ["pytest"]
-    },
+    install_requires=["click", "GitPython", "sqlite-utils>=3.17.1"],
+    extras_require={"test": ["pytest"]},
     python_requires=">=3.6",
 )
