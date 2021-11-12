@@ -7,13 +7,24 @@ import textwrap
 from pathlib import Path
 
 
-def iterate_file_versions(repo_path, filepath, ref="main", skip_commits=None):
+def iterate_file_versions(
+    repo_path, filepath, ref="main", skip_commits=None, show_progress=False
+):
     relative_path = str(Path(filepath).relative_to(repo_path))
     repo = git.Repo(repo_path, odbt=git.GitDB)
     commits = reversed(list(repo.iter_commits(ref, paths=[relative_path])))
+    progress_bar = None
+    if skip_commits:
+        # Filter down to just the ones we haven't seen
+        new_commits = [
+            commit for commit in commits if commit.hexsha not in skip_commits
+        ]
+        commits = new_commits
+    if show_progress:
+        progress_bar = click.progressbar(commits, show_pos=True, show_percent=True)
     for commit in commits:
-        if skip_commits and commit.hexsha in skip_commits:
-            continue
+        if progress_bar:
+            progress_bar.update(1)
         try:
             blob = [b for b in commit.tree.blobs if b.name == relative_path][0]
             yield commit.committed_datetime, commit.hexsha, blob.data_stream.read()
@@ -72,6 +83,11 @@ def cli():
     is_flag=True,
     help="Keep going if same ID occurs more than once in a single version of a file",
 )
+@click.option(
+    "--silent",
+    is_flag=True,
+    help="Don't show progress bar",
+)
 @click.version_option()
 def file(
     database,
@@ -84,6 +100,7 @@ def file(
     convert,
     imports,
     ignore_duplicate_ids,
+    silent,
 ):
     "Analyze the history of a specific file and write it to SQLite"
     if csv_ and convert:
@@ -134,6 +151,7 @@ def file(
         )
         if db["commits"].exists()
         else set(),
+        show_progress=not silent,
     ):
         if git_hash not in seen_hashes:
             seen_hashes.add(git_hash)

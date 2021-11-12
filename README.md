@@ -64,6 +64,7 @@ Additional options:
 - `--convert TEXT` - custom Python code for a conversion, see below.
 - `--import TEXT` - Python modules to import for `--convert`.
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
+- `--silent` - don't show the progress bar.
 
 Note that `id`, `item`, `version` and `commit` are reserved column names that are used by this tool. If your data contains any of these they will be renamed to `id_`, `item_`, `version_` or `commit_` to avoid clashing with the reserved columns.
 
