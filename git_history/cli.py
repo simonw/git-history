@@ -138,6 +138,16 @@ def file(
 
         # If --id is specified, do things a bit differently
         if ids:
+            # If '--id id' is only option, 'id' is not a reserved column
+            id_is_reserved = list(ids) != ["id"]
+            # Any ids that are reserved columns must be renamed
+            fixed_ids = set(
+                fix_reserved_columns(
+                    {id: 1 for id in ids},
+                    allow_id=not id_is_reserved,
+                    allow_banned=True,
+                ).keys()
+            )
             items_insert_extra_kwargs["pk"] = "id"
             # Check all items have those columns
             _ids_set = set(ids)
@@ -156,7 +166,8 @@ def file(
             items_insert_extra_kwargs["replace"] = True
             # Which of these are new versions of things we have seen before
             for item in items:
-                item_id = _hash(dict((id, item.get(id)) for id in ids))
+                item = fix_reserved_columns(item, allow_id=not id_is_reserved)
+                item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
                 if item_id in item_ids_in_this_version:
                     if not ignore_duplicate_ids:
                         raise click.ClickException(
@@ -166,7 +177,9 @@ def file(
                                     [
                                         item
                                         for item in items
-                                        if _hash(dict((id, item.get(id)) for id in ids))
+                                        if _hash(
+                                            dict((id, item.get(id)) for id in fixed_ids)
+                                        )
                                         == item_id
                                     ],
                                     indent=4,
@@ -192,10 +205,12 @@ def file(
             # Only add the items that had no new version
             items = items_to_add
 
-        if not ids:
-            # Add Git commit hash to each item
+        else:
+            # not ids - so just check them for banned columns and add the item["commit"]
             for item in items:
+                item = fix_reserved_columns(item)
                 item["commit"] = git_hash
+            # In this case item table needs a foreign key on 'commit'
             items_insert_extra_kwargs["foreign_keys"] = (("commit", "commits", "hash"),)
 
         # insert items
@@ -225,3 +240,27 @@ def _hash(record):
             "utf8"
         )
     ).hexdigest()
+
+
+def fix_reserved_columns(item, allow_id=False, allow_banned=False):
+    reserved = {"item", "version", "commit"}
+    banned = {"id_", "item_", "version_", "commit_"}
+    if not allow_id:
+        reserved.add("id")
+    if not allow_banned and any(key in banned for key in item):
+        raise click.ClickException(
+            "Column {} is one of these banned columns: {}\n{}".format(
+                sorted([key for key in item if key in banned]),
+                sorted(banned),
+                json.dumps(item, indent=4, default=str),
+            )
+        )
+    if not any(key in reserved for key in item):
+        return item
+    new_item = {}
+    for key in item:
+        if key in reserved:
+            new_item[key + "_"] = item[key]
+        else:
+            new_item[key] = item[key]
+    return new_item

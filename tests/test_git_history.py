@@ -25,6 +25,26 @@ def repo(tmpdir):
         ),
         "utf-8",
     )
+    (repo_dir / "items-with-reserved-columns.json").write_text(
+        json.dumps(
+            [
+                {"id": 1, "item": "Gin", "version": "v1", "commit": "commit1"},
+                {"id": 2, "item": "Tonic", "version": "v1", "commit": "commit1"},
+            ]
+        ),
+        "utf-8",
+    )
+    (repo_dir / "items-with-banned-columns.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id_": 1,
+                    "version_": "Gin",
+                }
+            ]
+        ),
+        "utf-8",
+    )
     git_commit = [
         "git",
         "-c",
@@ -34,7 +54,16 @@ def repo(tmpdir):
         "commit",
     ]
     subprocess.call(["git", "init"], cwd=str(repo_dir))
-    subprocess.call(["git", "add", "items.json"], cwd=str(repo_dir))
+    subprocess.call(
+        [
+            "git",
+            "add",
+            "items.json",
+            "items-with-reserved-columns.json",
+            "items-with-banned-columns.json",
+        ],
+        cwd=str(repo_dir),
+    )
     subprocess.call(git_commit + ["-m", "first"], cwd=str(repo_dir))
     subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
     (repo_dir / "items.json").write_text(
@@ -52,6 +81,16 @@ def repo(tmpdir):
                     "item_id": 3,
                     "name": "Rum",
                 },
+            ]
+        ),
+        "utf-8",
+    )
+    (repo_dir / "items-with-reserved-columns.json").write_text(
+        json.dumps(
+            [
+                {"id": 1, "item": "Gin", "version": "v1", "commit": "commit1"},
+                {"id": 2, "item": "Tonic 2", "version": "v1", "commit": "commit1"},
+                {"id": 3, "item": "Rum", "version": "v1", "commit": "commit1"},
             ]
         ),
         "utf-8",
@@ -139,3 +178,131 @@ def test_file_with_id(repo, tmpdir):
         {"item_id": 2, "version": 2, "name": "Tonic 2"},
         {"item_id": 3, "version": 1, "name": "Rum"},
     ]
+
+
+def test_file_with_reserved_columns(repo, tmpdir):
+    runner = CliRunner()
+    db_path = str(tmpdir / "reserved.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / "items-with-reserved-columns.json"),
+                "--repo",
+                str(repo),
+                "--id",
+                "id",
+            ],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    assert db.schema == (
+        "CREATE TABLE [commits] (\n"
+        "   [hash] TEXT PRIMARY KEY,\n"
+        "   [commit_at] TEXT\n"
+        ");\n"
+        "CREATE TABLE [items] (\n"
+        "   [id] TEXT PRIMARY KEY,\n"
+        "   [item_] TEXT,\n"
+        "   [version_] TEXT,\n"
+        "   [commit_] TEXT\n"
+        ");\n"
+        "CREATE TABLE [item_versions] (\n"
+        "   [item] TEXT REFERENCES [items]([id]),\n"
+        "   [version] INTEGER,\n"
+        "   [commit] TEXT REFERENCES [commits]([hash]),\n"
+        "   [id] INTEGER,\n"
+        "   [item_] TEXT,\n"
+        "   [version_] TEXT,\n"
+        "   [commit_] TEXT,\n"
+        "   PRIMARY KEY ([item], [version])\n"
+        ");"
+    )
+    item_versions = [
+        r for r in db.query("select id, item_, version_, commit_ from item_versions")
+    ]
+    assert item_versions == [
+        {"id": 1, "item_": "Gin", "version_": "v1", "commit_": "commit1"},
+        {"id": 2, "item_": "Tonic", "version_": "v1", "commit_": "commit1"},
+        {"id": 2, "item_": "Tonic 2", "version_": "v1", "commit_": "commit1"},
+        {"id": 3, "item_": "Rum", "version_": "v1", "commit_": "commit1"},
+    ]
+
+
+def test_more_than_one_id_makes_id_reserved(repo, tmpdir):
+    # If we use "--id id --id version" then id is converted to id_
+    # so we can add our own id_ that is a hash of those two columns
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / "items-with-reserved-columns.json"),
+                "--repo",
+                str(repo),
+                "--id",
+                "id",
+                "--id",
+                "version",
+            ],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    assert db.schema == (
+        "CREATE TABLE [commits] (\n"
+        "   [hash] TEXT PRIMARY KEY,\n"
+        "   [commit_at] TEXT\n"
+        ");\n"
+        "CREATE TABLE [items] (\n"
+        "   [id] TEXT PRIMARY KEY,\n"
+        "   [id_] INTEGER,\n"
+        "   [item_] TEXT,\n"
+        "   [version_] TEXT,\n"
+        "   [commit_] TEXT\n"
+        ");\n"
+        "CREATE TABLE [item_versions] (\n"
+        "   [item] TEXT REFERENCES [items]([id]),\n"
+        "   [version] INTEGER,\n"
+        "   [commit] TEXT REFERENCES [commits]([hash]),\n"
+        "   [id_] INTEGER,\n"
+        "   [item_] TEXT,\n"
+        "   [version_] TEXT,\n"
+        "   [commit_] TEXT,\n"
+        "   PRIMARY KEY ([item], [version])\n"
+        ");"
+    )
+
+
+@pytest.mark.parametrize("specify_id", (True, False))
+def test_file_with_banned_columns(repo, tmpdir, specify_id):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / "items-with-banned-columns.json"),
+                "--repo",
+                str(repo),
+            ]
+            + (["--id", "id_"] if specify_id else []),
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 1
+    assert result.output == (
+        "Error: Column ['id_', 'version_'] is one of these banned columns: ['commit_', 'id_', 'item_', 'version_']\n"
+        "{\n"
+        '    "id_": 1,\n'
+        '    "version_": "Gin"\n'
+        "}\n"
+        ""
+    )
