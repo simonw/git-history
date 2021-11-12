@@ -17,7 +17,9 @@ Install this tool using `pip`:
 
 The `file` command analyzes the history of an individual file.
 
-This assumes you have a JSON file that consists of an array of objects, and that has multiple versions stored away in the Git history, likely through [Git scraping](https://simonwillison.net/2020/Oct/9/git-scraping/).
+The command assumes you have a JSON file that consists of an array of objects, and that has multiple versions stored away in the Git history, likely through [Git scraping](https://simonwillison.net/2020/Oct/9/git-scraping/).
+
+(CSV and other formats are supported too, see below.)
 
 Most basic usage is:
 
@@ -58,9 +60,17 @@ Note that `id`, `item`, `version` and `commit` are reserved column names that ar
 
 There is one exception: if you have an `id` column and use `--id id` without specifying more than one ID column, your ìd` column will be used as the item ID but will not be renamed.
 
+### CSV and TSV data
+
+If the data in your repository is a CSV or TSV file you can process it by adding the `--csv` option. This will attempt to detect which delimiter is used by the file, so the same option works for both comma- and tab-separated values.
+
+    git-convert file trees.db trees.csv --id TreeID
+
 ### Custom conversions using --convert
 
-This tool expects each version of the stored file to be a JSON file that looks something like this:
+If your data is not already either CSV/TSV or a flat JSON array, you can reshape it using the `--convert` option.
+
+The format needed by this tool is an array of dictionaries that looks like this:
 
 ```json
 [
@@ -77,7 +87,7 @@ This tool expects each version of the stored file to be a JSON file that looks s
 ]
 ```
 
-If your data does not fit this shape, you can still use this tool to analyze it by writing a snippet of Python code that converts each stored file content into a Python list of dictionaries.
+If your data does not fit this shape, you can provide a snippet of Python code to converts the on-disk content of each stored file into a Python list of dictionaries.
 
 For example, if your stored files each look like this:
 
@@ -104,13 +114,15 @@ json.loads(content)["incidents"]
 ```
 (The `json` module is exposed to your custom function by default.)
 
-You would run the tool like this:
+You would then run the tool like this:
 
     git-convert file database.db incidents.json \
       --id id \
       --convert 'json.loads(content)["incidents"]'
 
-If you need to import additional modules you can do so with `--import`. This example shows how you could read a CSV file that uses `;` as the delimiter:
+The `content` variable is always a `bytes` object representing the content of the file at a specific moment in the repository's history.
+
+You can import additional modules using `--import`. This example shows how you could read a CSV file that uses `;` as the delimiter:
 
     git-history file trees.db ../sf-tree-history/Street_Tree_List.csv \
       --repo ../sf-tree-history \

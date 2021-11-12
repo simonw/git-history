@@ -3,6 +3,7 @@ import git
 import hashlib
 import json
 import sqlite_utils
+import textwrap
 from pathlib import Path
 
 
@@ -50,8 +51,13 @@ def cli():
 )
 @click.option("ignore", "--ignore", multiple=True, help="Columns to ignore")
 @click.option(
+    "csv_",
+    "--csv",
+    is_flag=True,
+    help="Expect CSV/TSV data, not JSON",
+)
+@click.option(
     "--convert",
-    default="json.loads(content)",
     help="Python code to read each file version content and return it as a list of dicts. Defaults to json.parse(content)",
 )
 @click.option(
@@ -74,11 +80,30 @@ def file(
     branch,
     ids,
     ignore,
+    csv_,
     convert,
     imports,
     ignore_duplicate_ids,
 ):
     "Analyze the history of a specific file and write it to SQLite"
+    if csv_ and convert:
+        raise click.ClickException("Cannot use both --csv and --convert")
+
+    if csv_:
+        convert = textwrap.dedent(
+            """
+            decoded = content.decode("utf-8")
+            dialect = csv.Sniffer().sniff(decoded[:512])
+            reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
+            return list(reader)
+        """
+        )
+        imports = ["io", "csv"]
+
+    if not convert:
+        convert = "json.loads(content)"
+
+    # Clean up the provided code
     # If single line and no 'return', add the return
     if "\n" not in convert and not convert.strip().startswith("return "):
         convert = "return {}".format(convert)

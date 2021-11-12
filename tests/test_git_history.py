@@ -45,6 +45,14 @@ def repo(tmpdir):
         ),
         "utf-8",
     )
+    (repo_dir / "trees.csv").write_text(
+        "TreeID,name\n1,Sophia\n2,Charlie",
+        "utf-8",
+    )
+    (repo_dir / "trees.tsv").write_text(
+        "TreeID\tname\n1\tSophia\n2\tCharlie",
+        "utf-8",
+    )
     git_commit = [
         "git",
         "-c",
@@ -61,6 +69,8 @@ def repo(tmpdir):
             "items.json",
             "items-with-reserved-columns.json",
             "items-with-banned-columns.json",
+            "trees.csv",
+            "trees.tsv",
         ],
         cwd=str(repo_dir),
     )
@@ -305,4 +315,46 @@ def test_file_with_banned_columns(repo, tmpdir, specify_id):
         '    "version_": "Gin"\n'
         "}\n"
         ""
+    )
+
+
+@pytest.mark.parametrize("file", ("trees.csv", "trees.tsv"))
+def test_csv_tsv(repo, tmpdir, file):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / file),
+                "--repo",
+                str(repo),
+                "--id",
+                "TreeID",
+                "--csv",
+            ],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    assert db.schema == (
+        "CREATE TABLE [commits] (\n"
+        "   [hash] TEXT PRIMARY KEY,\n"
+        "   [commit_at] TEXT\n"
+        ");\n"
+        "CREATE TABLE [items] (\n"
+        "   [id] TEXT PRIMARY KEY,\n"
+        "   [TreeID] TEXT,\n"
+        "   [name] TEXT\n"
+        ");\n"
+        "CREATE TABLE [item_versions] (\n"
+        "   [item] TEXT REFERENCES [items]([id]),\n"
+        "   [version] INTEGER,\n"
+        "   [commit] TEXT REFERENCES [commits]([hash]),\n"
+        "   [TreeID] TEXT,\n"
+        "   [name] TEXT,\n"
+        "   PRIMARY KEY ([item], [version])\n"
+        ");"
     )
