@@ -110,14 +110,19 @@ You would run the tool like this:
       --id id \
       --convert 'json.loads(content)["incidents"]'
 
-If you need to import additional modules you can do so with `--import`, for example:
+If you need to import additional modules you can do so with `--import`. This example shows how you could read a CSV file that uses `;` as the delimiter:
 
     git-history file trees.db ../sf-tree-history/Street_Tree_List.csv \
       --repo ../sf-tree-history \
       --import csv \
       --import io \
-      --convert 'list(csv.DictReader(io.StringIO(content.decode("utf-8"))))' \
+      --convert '
+        fp = io.StringIO(content.decode("utf-8"))
+        return list(csv.DictReader(fp, delimiter=";"))
+        ' \
       --id TreeID
+
+If your Python code spans more than one line it needs to include a `return` statement.
 
 ## Development
 
