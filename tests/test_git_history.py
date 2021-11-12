@@ -308,13 +308,12 @@ def test_file_with_banned_columns(repo, tmpdir, specify_id):
             catch_exceptions=False,
         )
     assert result.exit_code == 1
-    assert result.output == (
+    assert result.output.strip() == (
         "Error: Column ['id_', 'version_'] is one of these banned columns: ['commit_', 'id_', 'item_', 'version_']\n"
         "{\n"
         '    "id_": 1,\n'
         '    "version_": "Gin"\n'
-        "}\n"
-        ""
+        "}"
     )
 
 
