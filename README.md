@@ -15,26 +15,34 @@ Install this tool using `pip`:
 
 ## Usage
 
-The `file` command analyzes the history of an individual file.
+This tool can be run against a Git repository that holds a file that contains JSON, CSV/TSV or some other format and which has multiple versions tracked in the Git history. See [Git scraping](https://simonwillison.net/2020/Oct/9/git-scraping/) to understand how you might create such a repository.
 
-The command assumes you have a JSON file that consists of an array of objects, and that has multiple versions stored away in the Git history, likely through [Git scraping](https://simonwillison.net/2020/Oct/9/git-scraping/).
+The `file` command analyzes the history of an individual file within the repository, and generates a SQLite database table that represents the different versions of that file over time.
 
-(CSV and other formats are supported too, see below.)
+The file is assumed to contain multiple objects - for example, the results of scraping an electricity outage map or a CSV file full of records.
 
-Most basic usage is:
+Assuming you have a file called `incidents.json` that is a JSON array of objects, with multiple versions of that file recorded in a repository.
 
-    git-convert file database.db filename.json
+Change directory into the GitHub repository in question and run the following:
 
-This will create a new SQLite database in the `database.db` file with two tables:
+    git-convert file incidents.db incidents.json
+
+This will create a new SQLite database in the `incidents.db` file with two tables:
 
 - `commits` containing a row for every commit, with a `hash` column and the `commit_at` date.
 - `items` containing a row for every item in every version of the `filename.json` file - with an extra `commit` column that is a foreign key back to the `commits` table.
 
-More interesting is if you specify columns to be treated as IDs within that data, using the `--id` option one or more times. This allows the tool to track versions of each item as they change over time.
+If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `items` table.
 
-    git-convert file database.db filename.json --id IncidentID
+### De-duplicating items using IDs
 
-If you do this, three tables will be created - `commits`, `items` and `item_versions`.
+If your objects have a unique identifier - or multiple columns that together form a unique identifier - you can use the `--id` option to de-duplicate and track changes to each of those items over time.
+
+If there is a unique identifier column called `IncidentID` you could run the following:
+
+    git-convert file incidents.db incidents.json --id IncidentID
+
+This will create three tables - `commits`, `items` and `item_versions`.
 
 The `items` table will contain just the most recent version of each row, de-duplicated by ID.
 
@@ -52,6 +60,7 @@ Additional options:
 - `--branch TEXT` - the Git branch to analyze - defaults to `main`.
 - `--id TEXT` - as described above: pass one or more columns that uniquely identify a record, so that changes to that record can be calculated over time.
 - `--ignore TEXT` - one or more columns to ignore - they will not be included in the resulting database.
+- `--csv` - treat the data is CSV or TSV rather than JSON, and attempt to guess the correct dialect
 - `--convert TEXT` - custom Python code for a conversion, see below.
 - `--import TEXT` - Python modules to import for `--convert`.
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
