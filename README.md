@@ -23,7 +23,97 @@ Most basic usage is:
 
     git-convert file database.db filename.json
 
-This will create a new SQLite database in the `database.db` file with an `item` table containing row for every item in every version of the `filename.json` file - with extra columns `git_commit_at` and `git_hash`.
+This will create a new SQLite database in the `database.db` file with two tables:
+
+- `commits` containing a row for every commit, with a `hash` column and the `commit_at` date.
+- `items` containing a row for every item in every version of the `filename.json` file - with an extra `commit` column that is a foreign key back to the `commits` table.
+
+More interesting is if you specify columns to be treated as IDs within that data, using the `--id` option one or more times. This allows the tool to track versions of each item as they change over time.
+
+    git-convert file database.db filename.json --id IncidentID
+
+If you do this, three tables will be created - `commits`, `items` and `item_versions`.
+
+The `items` table will contain just the most recent version of each row, de-duplicated by ID.
+
+The `item_versions` table will contain a row for each captured differing version of that item, plus the following columns:
+
+- `item` as a foreign key to the `items` table
+- `commit` as a foreign key to the `commits` table
+- `version` as the numeric version number, starting at 1 and incrementing for each captured version
+
+If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
+
+Additional options:
+
+- `--repo DIRECTORY` - the path to the Git repository, if it is not the current working directory.
+- `--branch TEXT` - the Git branch to analyze - defaults to `main`.
+- `--id TEXT` - as described above: pass one or more columns that uniquely identify a record, so that changes to that record can be calculated over time.
+- `--ignore TEXT` - one or more columns to ignore - they will not be included in the resulting database.
+- `--convert TEXT` - custom Python code for a conversion, see below.
+- `--import TEXT` - Python modules to import for `--convert`.
+- `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
+
+### Custom conversions using --convert
+
+This tool expects each version of the stored file to be a JSON file that looks something like this:
+
+```json
+[
+    {
+        "id": "552",
+        "name": "Hawthorne Fire",
+        "engines": 3
+    },
+    {
+        "id": "556",
+        "name": "Merlin Fire",
+        "engines": 1
+    }
+]
+```
+
+If your data does not fit this shape, you can still use this tool to analyze it by writing a snippet of Python code that converts each stored file content into a Python list of dictionaries.
+
+For example, if your stored files each look like this:
+
+```json
+{
+    "incidents": [
+        {
+            "id": "552",
+            "name": "Hawthorne Fire",
+            "engines": 3
+        },
+        {
+            "id": "556",
+            "name": "Merlin Fire",
+            "engines": 1
+        }
+    ]
+}
+```
+You could use the following Python snippet to convert them to the required format:
+
+```python
+json.loads(content)["incidents"]
+```
+(The `json` module is exposed to your custom function by default.)
+
+You would run the tool like this:
+
+    git-convert file database.db incidents.json \
+      --id id \
+      --convert 'json.loads(content)["incidents"]'
+
+If you need to import additional modules you can do so with `--import`, for example:
+
+    git-history file trees.db ../sf-tree-history/Street_Tree_List.csv \
+      --repo ../sf-tree-history \
+      --import csv \
+      --import io \
+      --convert 'list(csv.DictReader(io.StringIO(content.decode("utf-8"))))' \
+      --id TreeID
 
 ## Development
 
