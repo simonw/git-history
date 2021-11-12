@@ -157,7 +157,7 @@ def file(
             if bad_items:
                 raise click.ClickException(
                     "Commit: {} - every item must have the --id keys. These items did not:\n{}".format(
-                        git_hash, json.dumps(bad_items, indent=4, default=str)
+                        git_hash, json.dumps(bad_items[:5], indent=4, default=str)
                     )
                 )
             # Also ensure there are not TWO items in this file with the same ID
@@ -181,7 +181,7 @@ def file(
                                             dict((id, item.get(id)) for id in fixed_ids)
                                         )
                                         == item_id
-                                    ],
+                                    ][:5],
                                     indent=4,
                                     default=str,
                                 ),
