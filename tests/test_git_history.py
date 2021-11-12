@@ -25,9 +25,17 @@ def repo(tmpdir):
         ),
         "utf-8",
     )
+    git_commit = [
+        "git",
+        "-c",
+        "user.name='Tests'",
+        "-c",
+        "user.email='actions@users.noreply.github.com'",
+        "commit",
+    ]
     subprocess.call(["git", "init"], cwd=str(repo_dir))
     subprocess.call(["git", "add", "items.json"], cwd=str(repo_dir))
-    subprocess.call(["git", "commit", "-m", "first"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "first"], cwd=str(repo_dir))
     subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
     (repo_dir / "items.json").write_text(
         json.dumps(
@@ -48,7 +56,7 @@ def repo(tmpdir):
         ),
         "utf-8",
     )
-    subprocess.call(["git", "commit", "-m", "second", "-a"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "second", "-a"], cwd=str(repo_dir))
     return repo_dir
 
 
