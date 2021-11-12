@@ -286,7 +286,7 @@ def _hash(record):
 
 
 def fix_reserved_columns(item, allow_id=False, allow_banned=False):
-    reserved = {"item", "version", "commit"}
+    reserved = {"item", "version", "commit", "rowid"}
     banned = {"id_", "item_", "version_", "commit_"}
     if not allow_id:
         reserved.add("id")

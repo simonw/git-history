@@ -66,7 +66,7 @@ Additional options:
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
 - `--silent` - don't show the progress bar.
 
-Note that `id`, `item`, `version` and `commit` are reserved column names that are used by this tool. If your data contains any of these they will be renamed to `id_`, `item_`, `version_` or `commit_` to avoid clashing with the reserved columns.
+Note that `id`, `item`, `version`, `commit` and `rowid` are reserved column names that are used by this tool. If your data contains any of these they will be renamed to `id_`, `item_`, `version_`, `commit_` or `rowid_` to avoid clashing with the reserved columns.
 
 There is one exception: if you have an `id` column and use `--id id` without specifying more than one ID column, your ìd` column will be used as the item ID but will not be renamed.
 

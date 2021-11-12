@@ -28,8 +28,20 @@ def repo(tmpdir):
     (repo_dir / "items-with-reserved-columns.json").write_text(
         json.dumps(
             [
-                {"id": 1, "item": "Gin", "version": "v1", "commit": "commit1"},
-                {"id": 2, "item": "Tonic", "version": "v1", "commit": "commit1"},
+                {
+                    "id": 1,
+                    "item": "Gin",
+                    "version": "v1",
+                    "commit": "commit1",
+                    "rowid": 5,
+                },
+                {
+                    "id": 2,
+                    "item": "Tonic",
+                    "version": "v1",
+                    "commit": "commit1",
+                    "rowid": 6,
+                },
             ]
         ),
         "utf-8",
@@ -218,7 +230,8 @@ def test_file_with_reserved_columns(repo, tmpdir):
         "   [id] TEXT PRIMARY KEY,\n"
         "   [item_] TEXT,\n"
         "   [version_] TEXT,\n"
-        "   [commit_] TEXT\n"
+        "   [commit_] TEXT,\n"
+        "   [rowid_] INTEGER\n"
         ");\n"
         "CREATE TABLE [item_versions] (\n"
         "   [item] TEXT REFERENCES [items]([id]),\n"
@@ -228,6 +241,7 @@ def test_file_with_reserved_columns(repo, tmpdir):
         "   [item_] TEXT,\n"
         "   [version_] TEXT,\n"
         "   [commit_] TEXT,\n"
+        "   [rowid_] INTEGER,\n"
         "   PRIMARY KEY ([item], [version])\n"
         ");"
     )
@@ -237,6 +251,7 @@ def test_file_with_reserved_columns(repo, tmpdir):
     assert item_versions == [
         {"id": 1, "item_": "Gin", "version_": "v1", "commit_": "commit1"},
         {"id": 2, "item_": "Tonic", "version_": "v1", "commit_": "commit1"},
+        {"id": 1, "item_": "Gin", "version_": "v1", "commit_": "commit1"},
         {"id": 2, "item_": "Tonic 2", "version_": "v1", "commit_": "commit1"},
         {"id": 3, "item_": "Rum", "version_": "v1", "commit_": "commit1"},
     ]
@@ -275,7 +290,8 @@ def test_more_than_one_id_makes_id_reserved(repo, tmpdir):
         "   [id_] INTEGER,\n"
         "   [item_] TEXT,\n"
         "   [version_] TEXT,\n"
-        "   [commit_] TEXT\n"
+        "   [commit_] TEXT,\n"
+        "   [rowid_] INTEGER\n"
         ");\n"
         "CREATE TABLE [item_versions] (\n"
         "   [item] TEXT REFERENCES [items]([id]),\n"
@@ -285,6 +301,7 @@ def test_more_than_one_id_makes_id_reserved(repo, tmpdir):
         "   [item_] TEXT,\n"
         "   [version_] TEXT,\n"
         "   [commit_] TEXT,\n"
+        "   [rowid_] INTEGER,\n"
         "   PRIMARY KEY ([item], [version])\n"
         ");"
     )
