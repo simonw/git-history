@@ -29,17 +29,17 @@ def repo(tmpdir):
         json.dumps(
             [
                 {
-                    "id": 1,
-                    "item": "Gin",
-                    "version": "v1",
-                    "commit": "commit1",
+                    "_id": 1,
+                    "_item": "Gin",
+                    "_version": "v1",
+                    "_commit": "commit1",
                     "rowid": 5,
                 },
                 {
-                    "id": 2,
-                    "item": "Tonic",
-                    "version": "v1",
-                    "commit": "commit1",
+                    "_id": 2,
+                    "_item": "Tonic",
+                    "_version": "v1",
+                    "_commit": "commit1",
                     "rowid": 6,
                 },
             ]
@@ -50,8 +50,8 @@ def repo(tmpdir):
         json.dumps(
             [
                 {
-                    "id_": 1,
-                    "version_": "Gin",
+                    "_id_": 1,
+                    "_version_": "Gin",
                 }
             ]
         ),
@@ -110,9 +110,27 @@ def repo(tmpdir):
     (repo_dir / "items-with-reserved-columns.json").write_text(
         json.dumps(
             [
-                {"id": 1, "item": "Gin", "version": "v1", "commit": "commit1"},
-                {"id": 2, "item": "Tonic 2", "version": "v1", "commit": "commit1"},
-                {"id": 3, "item": "Rum", "version": "v1", "commit": "commit1"},
+                {
+                    "_id": 1,
+                    "_item": "Gin",
+                    "_version": "v1",
+                    "_commit": "commit1",
+                    "rowid": 5,
+                },
+                {
+                    "_id": 2,
+                    "_item": "Tonic 2",
+                    "_version": "v1",
+                    "_commit": "commit1",
+                    "rowid": 6,
+                },
+                {
+                    "_id": 3,
+                    "_item": "Rum",
+                    "_version": "v1",
+                    "_commit": "commit1",
+                    "rowid": 7,
+                },
             ]
         ),
         "utf-8",
@@ -138,7 +156,7 @@ def test_file_without_id(repo, tmpdir):
         "CREATE TABLE [items] (\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT,\n"
-        "   [commit] TEXT REFERENCES [commits]([hash])\n"
+        "   [_commit] TEXT REFERENCES [commits]([hash])\n"
         ");"
     )
     assert db["commits"].count == 2
@@ -176,29 +194,29 @@ def test_file_with_id(repo, tmpdir):
         "   [commit_at] TEXT\n"
         ");\n"
         "CREATE TABLE [items] (\n"
-        "   [id] TEXT PRIMARY KEY,\n"
+        "   [_id] TEXT PRIMARY KEY,\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT\n"
         ");\n"
         "CREATE TABLE [item_versions] (\n"
-        "   [item] TEXT REFERENCES [items]([id]),\n"
-        "   [version] INTEGER,\n"
-        "   [commit] TEXT REFERENCES [commits]([hash]),\n"
+        "   [_item] TEXT REFERENCES [items]([_id]),\n"
+        "   [_version] INTEGER,\n"
+        "   [_commit] TEXT REFERENCES [commits]([hash]),\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT,\n"
-        "   PRIMARY KEY ([item], [version])\n"
+        "   PRIMARY KEY ([_item], [_version])\n"
         ");"
     )
     assert db["commits"].count == 2
     # Should have no duplicates
     item_versions = [
-        r for r in db.query("select item_id, version, name from item_versions")
+        r for r in db.query("select item_id, _version, name from item_versions")
     ]
     assert item_versions == [
-        {"item_id": 1, "version": 1, "name": "Gin"},
-        {"item_id": 2, "version": 1, "name": "Tonic"},
-        {"item_id": 2, "version": 2, "name": "Tonic 2"},
-        {"item_id": 3, "version": 1, "name": "Rum"},
+        {"item_id": 1, "_version": 1, "name": "Gin"},
+        {"item_id": 2, "_version": 1, "name": "Tonic"},
+        {"item_id": 2, "_version": 2, "name": "Tonic 2"},
+        {"item_id": 3, "_version": 1, "name": "Rum"},
     ]
 
 
@@ -215,7 +233,7 @@ def test_file_with_reserved_columns(repo, tmpdir):
                 "--repo",
                 str(repo),
                 "--id",
-                "id",
+                "_id",
             ],
             catch_exceptions=False,
         )
@@ -227,111 +245,61 @@ def test_file_with_reserved_columns(repo, tmpdir):
         "   [commit_at] TEXT\n"
         ");\n"
         "CREATE TABLE [items] (\n"
-        "   [id] TEXT PRIMARY KEY,\n"
-        "   [item_] TEXT,\n"
-        "   [version_] TEXT,\n"
-        "   [commit_] TEXT,\n"
+        "   [_id] TEXT PRIMARY KEY,\n"
+        "   [_id_] INTEGER,\n"
+        "   [_item_] TEXT,\n"
+        "   [_version_] TEXT,\n"
+        "   [_commit_] TEXT,\n"
         "   [rowid_] INTEGER\n"
         ");\n"
         "CREATE TABLE [item_versions] (\n"
-        "   [item] TEXT REFERENCES [items]([id]),\n"
-        "   [version] INTEGER,\n"
-        "   [commit] TEXT REFERENCES [commits]([hash]),\n"
-        "   [id] INTEGER,\n"
-        "   [item_] TEXT,\n"
-        "   [version_] TEXT,\n"
-        "   [commit_] TEXT,\n"
+        "   [_item] TEXT REFERENCES [items]([_id]),\n"
+        "   [_version] INTEGER,\n"
+        "   [_commit] TEXT REFERENCES [commits]([hash]),\n"
+        "   [_id_] INTEGER,\n"
+        "   [_item_] TEXT,\n"
+        "   [_version_] TEXT,\n"
+        "   [_commit_] TEXT,\n"
         "   [rowid_] INTEGER,\n"
-        "   PRIMARY KEY ([item], [version])\n"
+        "   PRIMARY KEY ([_item], [_version])\n"
         ");"
     )
     item_versions = [
-        r for r in db.query("select id, item_, version_, commit_ from item_versions")
+        r
+        for r in db.query(
+            "select _id_, _item_, _version_, _commit_, rowid_ from item_versions"
+        )
     ]
     assert item_versions == [
-        {"id": 1, "item_": "Gin", "version_": "v1", "commit_": "commit1"},
-        {"id": 2, "item_": "Tonic", "version_": "v1", "commit_": "commit1"},
-        {"id": 1, "item_": "Gin", "version_": "v1", "commit_": "commit1"},
-        {"id": 2, "item_": "Tonic 2", "version_": "v1", "commit_": "commit1"},
-        {"id": 3, "item_": "Rum", "version_": "v1", "commit_": "commit1"},
+        {
+            "_id_": 1,
+            "_item_": "Gin",
+            "_version_": "v1",
+            "_commit_": "commit1",
+            "rowid_": 5,
+        },
+        {
+            "_id_": 2,
+            "_item_": "Tonic",
+            "_version_": "v1",
+            "_commit_": "commit1",
+            "rowid_": 6,
+        },
+        {
+            "_id_": 2,
+            "_item_": "Tonic 2",
+            "_version_": "v1",
+            "_commit_": "commit1",
+            "rowid_": 6,
+        },
+        {
+            "_id_": 3,
+            "_item_": "Rum",
+            "_version_": "v1",
+            "_commit_": "commit1",
+            "rowid_": 7,
+        },
     ]
-
-
-def test_more_than_one_id_makes_id_reserved(repo, tmpdir):
-    # If we use "--id id --id version" then id is converted to id_
-    # so we can add our own id_ that is a hash of those two columns
-    runner = CliRunner()
-    db_path = str(tmpdir / "db.db")
-    with runner.isolated_filesystem():
-        result = runner.invoke(
-            cli,
-            [
-                "file",
-                db_path,
-                str(repo / "items-with-reserved-columns.json"),
-                "--repo",
-                str(repo),
-                "--id",
-                "id",
-                "--id",
-                "version",
-            ],
-            catch_exceptions=False,
-        )
-    assert result.exit_code == 0
-    db = sqlite_utils.Database(db_path)
-    assert db.schema == (
-        "CREATE TABLE [commits] (\n"
-        "   [hash] TEXT PRIMARY KEY,\n"
-        "   [commit_at] TEXT\n"
-        ");\n"
-        "CREATE TABLE [items] (\n"
-        "   [id] TEXT PRIMARY KEY,\n"
-        "   [id_] INTEGER,\n"
-        "   [item_] TEXT,\n"
-        "   [version_] TEXT,\n"
-        "   [commit_] TEXT,\n"
-        "   [rowid_] INTEGER\n"
-        ");\n"
-        "CREATE TABLE [item_versions] (\n"
-        "   [item] TEXT REFERENCES [items]([id]),\n"
-        "   [version] INTEGER,\n"
-        "   [commit] TEXT REFERENCES [commits]([hash]),\n"
-        "   [id_] INTEGER,\n"
-        "   [item_] TEXT,\n"
-        "   [version_] TEXT,\n"
-        "   [commit_] TEXT,\n"
-        "   [rowid_] INTEGER,\n"
-        "   PRIMARY KEY ([item], [version])\n"
-        ");"
-    )
-
-
-@pytest.mark.parametrize("specify_id", (True, False))
-def test_file_with_banned_columns(repo, tmpdir, specify_id):
-    runner = CliRunner()
-    db_path = str(tmpdir / "db.db")
-    with runner.isolated_filesystem():
-        result = runner.invoke(
-            cli,
-            [
-                "file",
-                db_path,
-                str(repo / "items-with-banned-columns.json"),
-                "--repo",
-                str(repo),
-            ]
-            + (["--id", "id_"] if specify_id else []),
-            catch_exceptions=False,
-        )
-    assert result.exit_code == 1
-    assert result.output.strip() == (
-        "Error: Column ['id_', 'version_'] is one of these banned columns: ['commit_', 'id_', 'item_', 'version_']\n"
-        "{\n"
-        '    "id_": 1,\n'
-        '    "version_": "Gin"\n'
-        "}"
-    )
 
 
 @pytest.mark.parametrize("file", ("trees.csv", "trees.tsv"))
@@ -361,16 +329,16 @@ def test_csv_tsv(repo, tmpdir, file):
         "   [commit_at] TEXT\n"
         ");\n"
         "CREATE TABLE [items] (\n"
-        "   [id] TEXT PRIMARY KEY,\n"
+        "   [_id] TEXT PRIMARY KEY,\n"
         "   [TreeID] TEXT,\n"
         "   [name] TEXT\n"
         ");\n"
         "CREATE TABLE [item_versions] (\n"
-        "   [item] TEXT REFERENCES [items]([id]),\n"
-        "   [version] INTEGER,\n"
-        "   [commit] TEXT REFERENCES [commits]([hash]),\n"
+        "   [_item] TEXT REFERENCES [items]([_id]),\n"
+        "   [_version] INTEGER,\n"
+        "   [_commit] TEXT REFERENCES [commits]([hash]),\n"
         "   [TreeID] TEXT,\n"
         "   [name] TEXT,\n"
-        "   PRIMARY KEY ([item], [version])\n"
+        "   PRIMARY KEY ([_item], [_version])\n"
         ");"
     )

@@ -30,7 +30,7 @@ Change directory into the GitHub repository in question and run the following:
 This will create a new SQLite database in the `incidents.db` file with two tables:
 
 - `commits` containing a row for every commit, with a `hash` column and the `commit_at` date.
-- `items` containing a row for every item in every version of the `filename.json` file - with an extra `commit` column that is a foreign key back to the `commits` table.
+- `items` containing a row for every item in every version of the `filename.json` file - with an extra `_commit` column that is a foreign key back to the `commits` table.
 
 If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `items` table.
 
@@ -48,9 +48,9 @@ The `items` table will contain just the most recent version of each row, de-dupl
 
 The `item_versions` table will contain a row for each captured differing version of that item, plus the following columns:
 
-- `item` as a foreign key to the `items` table
-- `commit` as a foreign key to the `commits` table
-- `version` as the numeric version number, starting at 1 and incrementing for each captured version
+- `_item` as a foreign key to the `items` table
+- `_commit` as a foreign key to the `commits` table
+- `_version` as the numeric version number, starting at 1 and incrementing for each captured version
 
 If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
 
@@ -66,9 +66,9 @@ Additional options:
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
 - `--silent` - don't show the progress bar.
 
-Note that `id`, `item`, `version`, `commit` and `rowid` are reserved column names that are used by this tool. If your data contains any of these they will be renamed to `id_`, `item_`, `version_`, `commit_` or `rowid_` to avoid clashing with the reserved columns.
+Note that `_id`, `_item`, `_version`, `_commit` and `rowid` are considered column names for the purposes of this tool. If your data contains any of these they will be renamed to `_id_`, `_item_`, `_version_`, `_commit_` or `_rowid_` to avoid clashing with the reserved columns.
 
-There is one exception: if you have an `id` column and use `--id id` without specifying more than one ID column, your ìd` column will be used as the item ID but will not be renamed.
+If you have a column with a name such as `_commit_` it will be renamed too, adding an additional trailing underscore, so `_commit_` becomes `_commit__` and `_commit__` becomes `_commit__`.
 
 ### CSV and TSV data
 

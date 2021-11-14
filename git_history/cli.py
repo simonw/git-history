@@ -5,6 +5,7 @@ import json
 import sqlite_utils
 import textwrap
 from pathlib import Path
+from .utils import fix_reserved_columns
 
 
 def iterate_file_versions(
@@ -181,17 +182,13 @@ def file(
 
         # If --id is specified, do things a bit differently
         if ids:
-            # If '--id id' is only option, 'id' is not a reserved column
-            id_is_reserved = list(ids) != ["id"]
             # Any ids that are reserved columns must be renamed
             fixed_ids = set(
                 fix_reserved_columns(
                     {id: 1 for id in ids},
-                    allow_id=not id_is_reserved,
-                    allow_banned=True,
                 ).keys()
             )
-            items_insert_extra_kwargs["pk"] = "id"
+            items_insert_extra_kwargs["pk"] = "_id"
             # Check all items have those columns
             _ids_set = set(ids)
             bad_items = [
@@ -209,7 +206,7 @@ def file(
             items_insert_extra_kwargs["replace"] = True
             # Which of these are new versions of things we have seen before
             for item in items:
-                item = fix_reserved_columns(item, allow_id=not id_is_reserved)
+                item = fix_reserved_columns(item)
                 item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
                 if item_id in item_ids_in_this_version:
                     if not ignore_duplicate_ids:
@@ -240,9 +237,9 @@ def file(
                     id_last_hash[item_id] = item_hash
                     version = id_versions.get(item_id, 0) + 1
                     id_versions[item_id] = version
-                    items_to_add.append(dict(item, id=item_id))
+                    items_to_add.append(dict(item, _id=item_id))
                     versions.append(
-                        dict(item, item=item_id, version=version, commit=git_hash)
+                        dict(item, _item=item_id, _version=version, _commit=git_hash)
                     )
 
             # Only add the items that had no new version
@@ -252,15 +249,17 @@ def file(
             # not ids - so just check them for banned columns and add the item["commit"]
             for item in items:
                 item = fix_reserved_columns(item)
-                item["commit"] = git_hash
+                item["_commit"] = git_hash
             # In this case item table needs a foreign key on 'commit'
-            items_insert_extra_kwargs["foreign_keys"] = (("commit", "commits", "hash"),)
+            items_insert_extra_kwargs["foreign_keys"] = (
+                ("_commit", "commits", "hash"),
+            )
 
         # insert items
         if items:
             db["items"].insert_all(
                 items,
-                column_order=("id",),
+                column_order=("_id",),
                 alter=True,
                 **items_insert_extra_kwargs,
             )
@@ -269,11 +268,14 @@ def file(
         if versions:
             db["item_versions"].insert_all(
                 versions,
-                pk=("item", "version"),
+                pk=("_item", "_version"),
                 alter=True,
                 replace=True,
-                column_order=("item", "version", "commit"),
-                foreign_keys=(("item", "items", "id"), ("commit", "commits", "hash")),
+                column_order=("_item", "_version", "_commit"),
+                foreign_keys=(
+                    ("_item", "items", "_id"),
+                    ("_commit", "commits", "hash"),
+                ),
             )
 
 
@@ -283,27 +285,3 @@ def _hash(record):
             "utf8"
         )
     ).hexdigest()
-
-
-def fix_reserved_columns(item, allow_id=False, allow_banned=False):
-    reserved = {"item", "version", "commit", "rowid"}
-    banned = {"id_", "item_", "version_", "commit_"}
-    if not allow_id:
-        reserved.add("id")
-    if not allow_banned and any(key in banned for key in item):
-        raise click.ClickException(
-            "Column {} is one of these banned columns: {}\n{}".format(
-                sorted([key for key in item if key in banned]),
-                sorted(banned),
-                json.dumps(item, indent=4, default=str),
-            )
-        )
-    if not any(key in reserved for key in item):
-        return item
-    new_item = {}
-    for key in item:
-        if key in reserved:
-            new_item[key + "_"] = item[key]
-        else:
-            new_item[key] = item[key]
-    return new_item
