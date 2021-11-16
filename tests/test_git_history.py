@@ -342,3 +342,56 @@ def test_csv_tsv(repo, tmpdir, file):
         "   PRIMARY KEY ([_item], [_version])\n"
         ");"
     )
+
+
+@pytest.mark.parametrize(
+    "convert,expected_rows",
+    (
+        (
+            "json.loads(content.upper())",
+            [
+                {"ITEM_ID": 1, "NAME": "GIN"},
+                {"ITEM_ID": 2, "NAME": "TONIC"},
+                {"ITEM_ID": 1, "NAME": "GIN"},
+                {"ITEM_ID": 2, "NAME": "TONIC 2"},
+                {"ITEM_ID": 3, "NAME": "RUM"},
+            ],
+        ),
+        # Generator
+        (
+            (
+                "data = json.loads(content)\n"
+                "for item in data:\n"
+                '    yield {"just_name": item["name"]}'
+            ),
+            [
+                {"just_name": "Gin"},
+                {"just_name": "Tonic"},
+                {"just_name": "Gin"},
+                {"just_name": "Tonic 2"},
+                {"just_name": "Rum"},
+            ],
+        ),
+    ),
+)
+def test_convert(repo, tmpdir, convert, expected_rows):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / "items.json"),
+                "--repo",
+                str(repo),
+                "--convert",
+                convert,
+            ],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    rows = [{k: v for k, v in r.items() if k != "_commit"} for r in db["items"].rows]
+    assert rows == expected_rows
