@@ -146,6 +146,33 @@ You can import additional modules using `--import`. This example shows how you c
 
 If your Python code spans more than one line it needs to include a `return` statement.
 
+You can also use Python generators in your `--convert` code, for example:
+
+    git-history file stats.db package-stats/stats.json \
+        --repo package-stats \
+        --convert '
+        data = json.loads(content)
+        for key, counts in data.items():
+            for date, count in counts.items():
+                yield {
+                    "package": key,
+                    "date": date,
+                    "count": count
+                }
+        ' --id package --id date
+
+This conversion function expects data that looks like this:
+
+```json
+{
+    "airtable-export": {
+        "2021-05-18": 66,
+        "2021-05-19": 60,
+        "2021-05-20": 87
+    }
+}
+```
+
 ## Development
 
 To contribute to this tool, first checkout the code. Then create a new virtual environment:

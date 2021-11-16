@@ -165,7 +165,8 @@ def file(
             # Skip empty JSON files
             continue
 
-        items = fn(content)
+        # list() to resolve generators for repeated access later
+        items = list(fn(content))
 
         # Remove any --ignore columns
         if ignore:
