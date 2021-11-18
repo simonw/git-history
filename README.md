@@ -25,7 +25,7 @@ Assuming you have a file called `incidents.json` that is a JSON array of objects
 
 Change directory into the GitHub repository in question and run the following:
 
-    git-convert file incidents.db incidents.json
+    git-history file incidents.db incidents.json
 
 This will create a new SQLite database in the `incidents.db` file with two tables:
 
@@ -40,7 +40,7 @@ If your objects have a unique identifier - or multiple columns that together for
 
 If there is a unique identifier column called `IncidentID` you could run the following:
 
-    git-convert file incidents.db incidents.json --id IncidentID
+    git-history file incidents.db incidents.json --id IncidentID
 
 This will create three tables - `commits`, `items` and `item_versions`.
 
@@ -74,7 +74,7 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 
 If the data in your repository is a CSV or TSV file you can process it by adding the `--csv` option. This will attempt to detect which delimiter is used by the file, so the same option works for both comma- and tab-separated values.
 
-    git-convert file trees.db trees.csv --id TreeID
+    git-history file trees.db trees.csv --id TreeID
 
 ### Custom conversions using --convert
 
@@ -126,7 +126,7 @@ json.loads(content)["incidents"]
 
 You would then run the tool like this:
 
-    git-convert file database.db incidents.json \
+    git-history file database.db incidents.json \
       --id id \
       --convert 'json.loads(content)["incidents"]'
 
