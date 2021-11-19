@@ -113,7 +113,7 @@ def file(
             decoded = content.decode("utf-8")
             dialect = csv.Sniffer().sniff(decoded[:512])
             reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
-            return list(reader)
+            return reader
         """
         )
         imports = ["io", "csv"]
@@ -140,9 +140,8 @@ def file(
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
     db = sqlite_utils.Database(database)
-    seen_hashes = set()
-    id_versions = {}
-    id_last_hash = {}
+    item_hash_id_versions = {}
+    item_hash_id_last_hash = {}
     for git_commit_at, git_hash, content in iterate_file_versions(
         resolved_repo,
         resolved_filepath,
@@ -154,13 +153,10 @@ def file(
         else set(),
         show_progress=not silent,
     ):
-        if git_hash not in seen_hashes:
-            seen_hashes.add(git_hash)
-            db["commits"].insert(
-                {"hash": git_hash, "commit_at": git_commit_at.isoformat()},
-                pk="hash",
-                replace=True,
-            )
+        commit_id = db["commits"].lookup(
+            {"hash": git_hash},
+            {"commit_at": git_commit_at.isoformat()},
+        )
         if not content.strip():
             # Skip empty JSON files
             continue
@@ -178,7 +174,6 @@ def file(
                 new_items.append(new_item)
             items = new_items
 
-        items_insert_extra_kwargs = {}
         versions = []
 
         # If --id is specified, do things a bit differently
@@ -189,7 +184,6 @@ def file(
                     {id: 1 for id in ids},
                 ).keys()
             )
-            items_insert_extra_kwargs["pk"] = "_id"
             # Check all items have those columns
             _ids_set = set(ids)
             bad_items = [
@@ -201,15 +195,13 @@ def file(
                         git_hash, json.dumps(bad_items[:5], indent=4, default=str)
                     )
                 )
-            # Also ensure there are not TWO items in this file with the same ID
-            item_ids_in_this_version = set()
-            items_to_add = []
-            items_insert_extra_kwargs["replace"] = True
+            # Also ensure there are not TWO items in this commit with the same ID
+            item_hash_ids_in_this_commit = set()
             # Which of these are new versions of things we have seen before
             for item in items:
                 item = fix_reserved_columns(item)
-                item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
-                if item_id in item_ids_in_this_version:
+                item_hash_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
+                if item_hash_id in item_hash_ids_in_this_commit:
                     if not ignore_duplicate_ids:
                         raise click.ClickException(
                             "Commit: {} - found multiple items with the same ID:\n{}".format(
@@ -221,7 +213,7 @@ def file(
                                         if _hash(
                                             dict((id, item.get(id)) for id in fixed_ids)
                                         )
-                                        == item_id
+                                        == item_hash
                                     ][:5],
                                     indent=4,
                                     default=str,
@@ -230,53 +222,48 @@ def file(
                         )
                     else:
                         continue
-                item_ids_in_this_version.add(item_id)
+                item_hash_ids_in_this_commit.add(item_hash_id)
+
                 # Has it changed since last time we saw it?
                 item_hash = _hash(item)
-                if id_last_hash.get(item_id) != item_hash:
-                    # It's either new or the content has changed
-                    id_last_hash[item_id] = item_hash
-                    version = id_versions.get(item_id, 0) + 1
-                    id_versions[item_id] = version
-                    items_to_add.append(dict(item, _id=item_id))
-                    versions.append(
-                        dict(item, _item=item_id, _version=version, _commit=git_hash)
+                if item_hash_id_last_hash.get(item_hash_id) != item_hash:
+                    # It's either new or the content has changed - so insert it
+                    item_hash_id_last_hash[item_hash_id] = item_hash
+                    version = item_hash_id_versions.get(item_hash_id, 0) + 1
+                    item_hash_id_versions[item_hash_id] = version
+
+                    # Add or fetch item
+                    item_to_insert = dict(
+                        item, _item_hash_id=item_hash_id, _commit=commit_id
                     )
-
-            # Only add the items that had no new version
-            items = items_to_add
-
+                    item_id = db["items"].lookup(
+                        {"_item_hash_id": item_hash_id},
+                        item_to_insert,
+                        column_order=("_id", "_item_hash_id"),
+                        pk="_id",
+                    )
+                    db["item_versions"].insert(
+                        dict(item, _item=item_id, _version=version, _commit=commit_id),
+                        pk=("_item", "_version"),
+                        alter=True,
+                        replace=True,
+                        column_order=("_item", "_version", "_commit"),
+                        foreign_keys=(
+                            ("_item", "items", "_id"),
+                            ("_commit", "commits", "id"),
+                        ),
+                    )
         else:
-            # not ids - so just check them for banned columns and add the item["commit"]
+            # no --id - so just correct for reserved columns and add item["_commit"]
             for item in items:
                 item = fix_reserved_columns(item)
-                item["_commit"] = git_hash
+                item["_commit"] = commit_id
             # In this case item table needs a foreign key on 'commit'
-            items_insert_extra_kwargs["foreign_keys"] = (
-                ("_commit", "commits", "hash"),
-            )
-
-        # insert items
-        if items:
             db["items"].insert_all(
                 items,
                 column_order=("_id",),
                 alter=True,
-                **items_insert_extra_kwargs,
-            )
-
-        # insert versions
-        if versions:
-            db["item_versions"].insert_all(
-                versions,
-                pk=("_item", "_version"),
-                alter=True,
-                replace=True,
-                column_order=("_item", "_version", "_commit"),
-                foreign_keys=(
-                    ("_item", "items", "_id"),
-                    ("_commit", "commits", "hash"),
-                ),
+                foreign_keys=(("_commit", "commits", "id"),),
             )
 
 
