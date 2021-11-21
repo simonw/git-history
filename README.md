@@ -21,7 +21,22 @@ The `file` command analyzes the history of an individual file within the reposit
 
 The file is assumed to contain multiple objects - for example, the results of scraping an electricity outage map or a CSV file full of records.
 
-Assuming you have a file called `incidents.json` that is a JSON array of objects, with multiple versions of that file recorded in a repository.
+Assuming you have a file called `incidents.json` that is a JSON array of objects, with multiple versions of that file recorded in a repository. Each version of that file might look something like this:
+
+```json
+[
+    {
+        "IncidentID": "abc123",
+        "Location": "Corner of 4th and Vermont",
+        "Type": "fire"
+    },
+    {
+        "IncidentID": "cde448",
+        "Location": "555 West Example Drive",
+        "Type": "medical"
+    }
+]
+```
 
 Change directory into the GitHub repository in question and run the following:
 
@@ -31,6 +46,24 @@ This will create a new SQLite database in the `incidents.db` file with two table
 
 - `commits` containing a row for every commit, with a `hash` column and the `commit_at` date.
 - `items` containing a row for every item in every version of the `filename.json` file - with an extra `_commit` column that is a foreign key back to the `commits` table.
+
+The database schema for this example will look like this:
+
+```sql
+CREATE TABLE [commits] (
+   [id] INTEGER PRIMARY KEY,
+   [hash] TEXT,
+   [commit_at] TEXT
+);
+CREATE UNIQUE INDEX [idx_commits_hash]
+    ON [commits] ([hash]);
+CREATE TABLE [items] (
+   [IncidentID] TEXT,
+   [Location] TEXT,
+   [Type] TEXT,
+   [_commit] INTEGER REFERENCES [commits]([id])
+);
+```
 
 If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `items` table.
 
@@ -44,13 +77,48 @@ If there is a unique identifier column called `IncidentID` you could run the fol
 
 This will create three tables - `commits`, `items` and `item_versions`.
 
-The `items` table will contain just the most recent version of each row, de-duplicated by ID.
+This time the schema will look like this:
+
+```sql
+CREATE TABLE [commits] (
+   [id] INTEGER PRIMARY KEY,
+   [hash] TEXT,
+   [commit_at] TEXT
+);
+CREATE UNIQUE INDEX [idx_commits_hash]
+    ON [commits] ([hash]);
+CREATE TABLE [items] (
+   [_id] INTEGER PRIMARY KEY,
+   [_item_id] TEXT,
+   [IncidentID] TEXT,
+   [Location] TEXT,
+   [Type] TEXT,
+   [_commit] INTEGER
+);
+CREATE UNIQUE INDEX [idx_items__item_id]
+    ON [items] ([_item_id]);
+CREATE TABLE [item_versions] (
+   [_item] INTEGER REFERENCES [items]([_id]),
+   [_version] INTEGER,
+   [_commit] INTEGER REFERENCES [commits]([id]),
+   [IncidentID] TEXT,
+   [Location] TEXT,
+   [Type] TEXT,
+   PRIMARY KEY ([_item], [_version])
+);
+```
+
+The `items` table will contain the most recent version of each row, de-duplicated by ID, plus the following additional columns:
+
+- `_id` - a numeric integer primary key, used as a foreign key from the `item_versions` table.
+- `_item_id` - a hash of the values of the columns specified using the `--id` option to the command. This is used for de-duplication when processing new versions.
+- `_commit` - a foreign key to the `commits` table.
 
 The `item_versions` table will contain a row for each captured differing version of that item, plus the following columns:
 
-- `_item` as a foreign key to the `items` table
-- `_commit` as a foreign key to the `commits` table
-- `_version` as the numeric version number, starting at 1 and incrementing for each captured version
+- `_item` - a foreign key to the `items` table.
+- `_version` - the numeric version number, starting at 1 and incrementing for each captured version.
+- `_commit` - a foreign key to the `commits` table.
 
 If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
 
@@ -80,22 +148,7 @@ If the data in your repository is a CSV or TSV file you can process it by adding
 
 If your data is not already either CSV/TSV or a flat JSON array, you can reshape it using the `--convert` option.
 
-The format needed by this tool is an array of dictionaries that looks like this:
-
-```json
-[
-    {
-        "id": "552",
-        "name": "Hawthorne Fire",
-        "engines": 3
-    },
-    {
-        "id": "556",
-        "name": "Merlin Fire",
-        "engines": 1
-    }
-]
-```
+The format needed by this tool is an array of dictionaries, as demonstrated by the `incidents.json` example above.
 
 If your data does not fit this shape, you can provide a snippet of Python code to converts the on-disk content of each stored file into a Python list of dictionaries.
 
