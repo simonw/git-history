@@ -9,7 +9,7 @@ import pytest
         ("_item", "_item_"),
         ("_version", "_version_"),
         ("_commit", "_commit_"),
-        ("_item_hash", "_item_hash_"),
+        ("_item_id", "_item_id_"),
         ("rowid", "rowid_"),
         ("rowid_", "rowid__"),
         ("_id__", "_id___"),

@@ -140,8 +140,8 @@ def file(
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
     db = sqlite_utils.Database(database)
-    item_hash_id_versions = {}
-    item_hash_id_last_hash = {}
+    item_id_versions = {}
+    item_id_last_hash = {}
     for git_commit_at, git_hash, content in iterate_file_versions(
         resolved_repo,
         resolved_filepath,
@@ -196,12 +196,12 @@ def file(
                     )
                 )
             # Also ensure there are not TWO items in this commit with the same ID
-            item_hash_ids_in_this_commit = set()
+            item_ids_in_this_commit = set()
             # Which of these are new versions of things we have seen before
             for item in items:
                 item = fix_reserved_columns(item)
-                item_hash_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
-                if item_hash_id in item_hash_ids_in_this_commit:
+                item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
+                if item_id in item_ids_in_this_commit:
                     if not ignore_duplicate_ids:
                         raise click.ClickException(
                             "Commit: {} - found multiple items with the same ID:\n{}".format(
@@ -213,7 +213,7 @@ def file(
                                         if _hash(
                                             dict((id, item.get(id)) for id in fixed_ids)
                                         )
-                                        == item_hash
+                                        == item_id
                                     ][:5],
                                     indent=4,
                                     default=str,
@@ -222,24 +222,22 @@ def file(
                         )
                     else:
                         continue
-                item_hash_ids_in_this_commit.add(item_hash_id)
+                item_ids_in_this_commit.add(item_id)
 
                 # Has it changed since last time we saw it?
-                item_hash = _hash(item)
-                if item_hash_id_last_hash.get(item_hash_id) != item_hash:
+                item_full_hash = _hash(item)
+                if item_id_last_hash.get(item_id) != item_full_hash:
                     # It's either new or the content has changed - so insert it
-                    item_hash_id_last_hash[item_hash_id] = item_hash
-                    version = item_hash_id_versions.get(item_hash_id, 0) + 1
-                    item_hash_id_versions[item_hash_id] = version
+                    item_id_last_hash[item_id] = item_full_hash
+                    version = item_id_versions.get(item_id, 0) + 1
+                    item_id_versions[item_id] = version
 
                     # Add or fetch item
-                    item_to_insert = dict(
-                        item, _item_hash_id=item_hash_id, _commit=commit_id
-                    )
+                    item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
                     item_id = db["items"].lookup(
-                        {"_item_hash_id": item_hash_id},
+                        {"_item_id": item_id},
                         item_to_insert,
-                        column_order=("_id", "_item_hash_id"),
+                        column_order=("_id", "_item_id"),
                         pk="_id",
                     )
                     db["item_versions"].insert(
