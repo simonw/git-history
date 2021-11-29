@@ -246,6 +246,8 @@ def file(
                     item_id_to_last_full_hash.get(item_id) != item_full_hash
                 )
 
+                changed_columns = {}
+
                 if item_is_new or item_full_hash_has_changed:
                     # It's either new or the content has changed - so update item and insert an item_version
                     item_id_to_last_full_hash[item_id] = item_full_hash
@@ -277,34 +279,51 @@ def file(
                             }
                         item_id_to_previous_version[item_id] = item
 
-                        _changed = json.dumps(list(changed_columns.keys()))
-
                         # Only record the columns that changed
                         item_version = dict(
                             changed_columns,
                             _item=item_id,
                             _version=version,
                             _commit=commit_id,
-                            _changed=_changed,
                             _item_full_hash=item_full_hash,
-                            _item_full = json.dumps(item, default=repr),
+                            # _item_full = json.dumps(item, default=repr),
                         )
                     else:
                         item_version = dict(
                             item, _item=item_id, _version=version, _commit=commit_id
                         )
 
-                    db["item_versions"].insert(
-                        item_version,
-                        pk=("_item", "_version"),
-                        alter=True,
-                        replace=True,
-                        column_order=("_item", "_version", "_commit"),
-                        foreign_keys=(
-                            ("_item", "items", "_id"),
-                            ("_commit", "commits", "id"),
-                        ),
+                    item_version_id = (
+                        db["item_versions"]
+                        .insert(
+                            item_version,
+                            pk="id",
+                            alter=True,
+                            replace=True,
+                            column_order=("_item", "_version", "_commit"),
+                            foreign_keys=(
+                                ("_item", "items", "_id"),
+                                ("_commit", "commits", "id"),
+                            ),
+                        )
+                        .last_pk
                     )
+
+                    if changed_columns:
+                        # Record which columns changed in the changed m2m table
+                        for column in changed_columns:
+                            db["changed"].insert(
+                                {
+                                    "item_version": item_version_id,
+                                    "column": db["columns"].lookup({"name": column}),
+                                },
+                                pk=("item_version", "column"),
+                                foreign_keys=(
+                                    ("item_version", "item_versions", "id"),
+                                    ("column", "columns", "id"),
+                                ),
+                            )
+
         else:
             # no --id - so just correct for reserved columns and add item["_commit"]
             for item in items:
