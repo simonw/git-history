@@ -61,6 +61,12 @@ def cli():
 @click.option(
     "ids", "--id", multiple=True, help="Columns (can be multiple) to use as an ID"
 )
+@click.option(
+    "changed_mode",
+    "--changed",
+    is_flag=True,
+    help="Only write column values that item_versions that changed since the previous version",
+)
 @click.option("ignore", "--ignore", multiple=True, help="Columns to ignore")
 @click.option(
     "csv_",
@@ -97,6 +103,7 @@ def file(
     branch,
     ids,
     ignore,
+    changed_mode,
     csv_,
     convert,
     imports,
@@ -106,6 +113,11 @@ def file(
     "Analyze the history of a specific file and write it to SQLite"
     if csv_ and convert:
         raise click.ClickException("Cannot use both --csv and --convert")
+
+    if changed_mode and not ids:
+        raise click.ClickException(
+            "--changed can only be used if you specify at least one --id"
+        )
 
     if csv_:
         convert = textwrap.dedent(
@@ -140,8 +152,11 @@ def file(
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
     db = sqlite_utils.Database(database)
-    item_id_versions = {}
-    item_id_last_hash = {}
+
+    item_id_to_version = {}
+    item_id_to_last_full_hash = {}
+    item_id_to_previous_version = {}
+
     for git_commit_at, git_hash, content in iterate_file_versions(
         resolved_repo,
         resolved_filepath,
@@ -174,8 +189,6 @@ def file(
                 new_items.append(new_item)
             items = new_items
 
-        versions = []
-
         # If --id is specified, do things a bit differently
         if ids:
             # Any ids that are reserved columns must be renamed
@@ -195,13 +208,13 @@ def file(
                         git_hash, json.dumps(bad_items[:5], indent=4, default=str)
                     )
                 )
-            # Also ensure there are not TWO items in this commit with the same ID
             item_ids_in_this_commit = set()
-            # Which of these are new versions of things we have seen before
+            # Which of these are new versions of things we have seen before?
             for item in items:
                 item = fix_reserved_columns(item)
                 item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
                 if item_id in item_ids_in_this_commit:
+                    # Ensure there are not TWO items in this commit with the same ID
                     if not ignore_duplicate_ids:
                         raise click.ClickException(
                             "Commit: {} - found multiple items with the same ID:\n{}".format(
@@ -221,16 +234,23 @@ def file(
                             )
                         )
                     else:
+                        # Skip this one
                         continue
+
                 item_ids_in_this_commit.add(item_id)
 
                 # Has it changed since last time we saw it?
                 item_full_hash = _hash(item)
-                if item_id_last_hash.get(item_id) != item_full_hash:
-                    # It's either new or the content has changed - so insert it
-                    item_id_last_hash[item_id] = item_full_hash
-                    version = item_id_versions.get(item_id, 0) + 1
-                    item_id_versions[item_id] = version
+                item_is_new = item_id not in item_id_to_last_full_hash
+                item_full_hash_has_changed = (
+                    item_id_to_last_full_hash.get(item_id) != item_full_hash
+                )
+
+                if item_is_new or item_full_hash_has_changed:
+                    # It's either new or the content has changed - so update item and insert an item_version
+                    item_id_to_last_full_hash[item_id] = item_full_hash
+                    version = item_id_to_version.get(item_id, 0) + 1
+                    item_id_to_version[item_id] = version
 
                     # Add or fetch item
                     item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
@@ -240,8 +260,42 @@ def file(
                         column_order=("_id", "_item_id"),
                         pk="_id",
                     )
+
+                    # In changed_mode we also track which columns changed
+                    if changed_mode:
+                        previous_item = item_id_to_previous_version.get(item_id)
+
+                        if previous_item is None:
+                            # First version of this item
+                            changed_columns = item
+                        else:
+                            changed_columns = {
+                                key: value
+                                for key, value in item.items()
+                                if (key not in previous_item)
+                                or previous_item[key] != value
+                            }
+                        item_id_to_previous_version[item_id] = item
+
+                        _changed = json.dumps(list(changed_columns.keys()))
+
+                        # Only record the columns that changed
+                        item_version = dict(
+                            changed_columns,
+                            _item=item_id,
+                            _version=version,
+                            _commit=commit_id,
+                            _changed=_changed,
+                            _item_full_hash=item_full_hash,
+                            _item_full = json.dumps(item, default=repr),
+                        )
+                    else:
+                        item_version = dict(
+                            item, _item=item_id, _version=version, _commit=commit_id
+                        )
+
                     db["item_versions"].insert(
-                        dict(item, _item=item_id, _version=version, _commit=commit_id),
+                        item_version,
                         pk=("_item", "_version"),
                         alter=True,
                         replace=True,
