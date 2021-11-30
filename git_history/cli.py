@@ -331,7 +331,9 @@ def file(
                                     "item_version": item_version_id,
                                     "column": db["columns"].lookup(
                                         {"namespace": namespace_id, "name": column},
-                                        foreign_keys=(("namespace", "namespaces", "id"),)
+                                        foreign_keys=(
+                                            ("namespace", "namespaces", "id"),
+                                        ),
                                     ),
                                 },
                                 pk=("item_version", "column"),
