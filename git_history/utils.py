@@ -1,6 +1,6 @@
 import re
 
-RESERVED = ("_id", "_item", "_version", "_commit", "_item_id", "rowid")
+RESERVED = ("_id", "_changed", "_item", "_version", "_commit", "_item_id", "rowid")
 reserved_with_suffix_re = re.compile("^({})_*$".format("|".join(RESERVED)))
 
 
