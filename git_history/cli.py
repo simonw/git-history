@@ -65,7 +65,7 @@ def cli():
     "changed_mode",
     "--changed",
     is_flag=True,
-    help="Only write column values that item_versions that changed since the previous version",
+    help="Only write column values that item_version that changed since the previous version",
 )
 @click.option("ignore", "--ignore", multiple=True, help="Columns to ignore")
 @click.option(
@@ -161,14 +161,12 @@ def file(
         resolved_repo,
         resolved_filepath,
         branch,
-        skip_commits=set(
-            r[0] for r in db.execute("select hash from commits").fetchall()
-        )
-        if db["commits"].exists()
+        skip_commits=set(r[0] for r in db.execute("select hash from commit").fetchall())
+        if db["commit"].exists()
         else set(),
         show_progress=not silent,
     ):
-        commit_id = db["commits"].lookup(
+        commit_id = db["commit"].lookup(
             {"hash": git_hash},
             {"commit_at": git_commit_at.isoformat()},
         )
@@ -256,7 +254,7 @@ def file(
 
                     # Add or fetch item
                     item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
-                    item_id = db["items"].lookup(
+                    item_id = db["item"].lookup(
                         {"_item_id": item_id},
                         item_to_insert,
                         column_order=("_id", "_item_id"),
@@ -294,7 +292,7 @@ def file(
                         )
 
                     item_version_id = (
-                        db["item_versions"]
+                        db["item_version"]
                         .insert(
                             item_version,
                             pk="_id",
@@ -302,8 +300,8 @@ def file(
                             replace=True,
                             column_order=("_item", "_version", "_commit"),
                             foreign_keys=(
-                                ("_item", "items", "_id"),
-                                ("_commit", "commits", "id"),
+                                ("_item", "item", "_id"),
+                                ("_commit", "commit", "id"),
                             ),
                         )
                         .last_pk
@@ -319,7 +317,7 @@ def file(
                                 },
                                 pk=("item_version", "column"),
                                 foreign_keys=(
-                                    ("item_version", "item_versions", "id"),
+                                    ("item_version", "item_version", "id"),
                                     ("column", "columns", "id"),
                                 ),
                             )
@@ -330,11 +328,11 @@ def file(
                 item = fix_reserved_columns(item)
                 item["_commit"] = commit_id
             # In this case item table needs a foreign key on 'commit'
-            db["items"].insert_all(
+            db["item"].insert_all(
                 items,
                 column_order=("_id",),
                 alter=True,
-                foreign_keys=(("_commit", "commits", "id"),),
+                foreign_keys=(("_commit", "commit", "id"),),
             )
 
 

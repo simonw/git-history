@@ -44,28 +44,28 @@ Change directory into the GitHub repository in question and run the following:
 
 This will create a new SQLite database in the `incidents.db` file with two tables:
 
-- `commits` containing a row for every commit, with a `hash` column and the `commit_at` date.
-- `items` containing a row for every item in every version of the `filename.json` file - with an extra `_commit` column that is a foreign key back to the `commits` table.
+- `commit` containing a row for every commit, with a `hash` column and the `commit_at` date.
+- `item` containing a row for every item in every version of the `filename.json` file - with an extra `_commit` column that is a foreign key back to the `commit` table.
 
 The database schema for this example will look like this:
 
 ```sql
-CREATE TABLE [commits] (
+CREATE TABLE [commit] (
    [id] INTEGER PRIMARY KEY,
    [hash] TEXT,
    [commit_at] TEXT
 );
-CREATE UNIQUE INDEX [idx_commits_hash]
-    ON [commits] ([hash]);
-CREATE TABLE [items] (
+CREATE UNIQUE INDEX [idx_commit_hash]
+    ON [commit] ([hash]);
+CREATE TABLE [item] (
    [IncidentID] TEXT,
    [Location] TEXT,
    [Type] TEXT,
-   [_commit] INTEGER REFERENCES [commits]([id])
+   [_commit] INTEGER REFERENCES [commit]([id])
 );
 ```
 
-If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `items` table.
+If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `item` table.
 
 ### De-duplicating items using IDs
 
@@ -75,19 +75,19 @@ If there is a unique identifier column called `IncidentID` you could run the fol
 
     git-history file incidents.db incidents.json --id IncidentID
 
-This will create three tables - `commits`, `items` and `item_versions`.
+This will create three tables - `commit`, `item` and `item_version`.
 
 This time the schema will look like this:
 
 ```sql
-CREATE TABLE [commits] (
+CREATE TABLE [commit] (
    [id] INTEGER PRIMARY KEY,
    [hash] TEXT,
    [commit_at] TEXT
 );
-CREATE UNIQUE INDEX [idx_commits_hash]
-    ON [commits] ([hash]);
-CREATE TABLE [items] (
+CREATE UNIQUE INDEX [idx_commit_hash]
+    ON [commit] ([hash]);
+CREATE TABLE [item] (
    [_id] INTEGER PRIMARY KEY,
    [_item_id] TEXT,
    [IncidentID] TEXT,
@@ -95,30 +95,30 @@ CREATE TABLE [items] (
    [Type] TEXT,
    [_commit] INTEGER
 );
-CREATE UNIQUE INDEX [idx_items__item_id]
-    ON [items] ([_item_id]);
-CREATE TABLE [item_versions] (
-   [_item] INTEGER REFERENCES [items]([_id]),
+CREATE UNIQUE INDEX [idx_item__item_id]
+    ON [item] ([_item_id]);
+CREATE TABLE [item_version] (
+   [_id] INTEGER PRIMARY KEY,
+   [_item] INTEGER REFERENCES [item]([_id]),
    [_version] INTEGER,
-   [_commit] INTEGER REFERENCES [commits]([id]),
+   [_commit] INTEGER REFERENCES [commit]([id]),
    [IncidentID] TEXT,
    [Location] TEXT,
-   [Type] TEXT,
-   PRIMARY KEY ([_item], [_version])
+   [Type] TEXT
 );
 ```
 
-The `items` table will contain the most recent version of each row, de-duplicated by ID, plus the following additional columns:
+The `item` table will contain the most recent version of each row, de-duplicated by ID, plus the following additional columns:
 
-- `_id` - a numeric integer primary key, used as a foreign key from the `item_versions` table.
+- `_id` - a numeric integer primary key, used as a foreign key from the `item_version` table.
 - `_item_id` - a hash of the values of the columns specified using the `--id` option to the command. This is used for de-duplication when processing new versions.
-- `_commit` - a foreign key to the `commits` table.
+- `_commit` - a foreign key to the `commit` table.
 
-The `item_versions` table will contain a row for each captured differing version of that item, plus the following columns:
+The `item_version` table will contain a row for each captured differing version of that item, plus the following columns:
 
-- `_item` - a foreign key to the `items` table.
+- `_item` - a foreign key to the `item` table.
 - `_version` - the numeric version number, starting at 1 and incrementing for each captured version.
-- `_commit` - a foreign key to the `commits` table.
+- `_commit` - a foreign key to the `commit` table.
 
 If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
 

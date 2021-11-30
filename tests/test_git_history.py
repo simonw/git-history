@@ -149,22 +149,22 @@ def test_file_without_id(repo, tmpdir):
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     assert db.schema == (
-        "CREATE TABLE [commits] (\n"
+        "CREATE TABLE [commit] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commits_hash]\n"
-        "    ON [commits] ([hash]);\n"
-        "CREATE TABLE [items] (\n"
+        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
+        "    ON [commit] ([hash]);\n"
+        "CREATE TABLE [item] (\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT,\n"
-        "   [_commit] INTEGER REFERENCES [commits]([id])\n"
+        "   [_commit] INTEGER REFERENCES [commit]([id])\n"
         ");"
     )
-    assert db["commits"].count == 2
+    assert db["commit"].count == 2
     # Should have some duplicates
-    assert [(r["item_id"], r["name"]) for r in db["items"].rows] == [
+    assert [(r["item_id"], r["name"]) for r in db["item"].rows] == [
         (1, "Gin"),
         (2, "Tonic"),
         (1, "Gin"),
@@ -192,37 +192,37 @@ def test_file_with_id(repo, tmpdir):
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     assert db.schema == (
-        "CREATE TABLE [commits] (\n"
+        "CREATE TABLE [commit] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commits_hash]\n"
-        "    ON [commits] ([hash]);\n"
-        "CREATE TABLE [items] (\n"
+        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
+        "    ON [commit] ([hash]);\n"
+        "CREATE TABLE [item] (\n"
         "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item_id] TEXT,\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT,\n"
         "   [_commit] INTEGER\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_items__item_id]\n"
-        "    ON [items] ([_item_id]);\n"
-        "CREATE TABLE [item_versions] (\n"
+        "CREATE UNIQUE INDEX [idx_item__item_id]\n"
+        "    ON [item] ([_item_id]);\n"
+        "CREATE TABLE [item_version] (\n"
         "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item] INTEGER REFERENCES [items]([_id]),\n"
+        "   [_item] INTEGER REFERENCES [item]([_id]),\n"
         "   [_version] INTEGER,\n"
-        "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
+        "   [_commit] INTEGER REFERENCES [commit]([id]),\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT\n"
         ");"
     )
-    assert db["commits"].count == 2
+    assert db["commit"].count == 2
     # Should have no duplicates
-    item_versions = [
-        r for r in db.query("select item_id, _version, name from item_versions")
+    item_version = [
+        r for r in db.query("select item_id, _version, name from item_version")
     ]
-    assert item_versions == [
+    assert item_version == [
         {"item_id": 1, "_version": 1, "name": "Gin"},
         {"item_id": 2, "_version": 1, "name": "Tonic"},
         {"item_id": 2, "_version": 2, "name": "Tonic 2"},
@@ -250,14 +250,14 @@ def test_file_with_reserved_columns(repo, tmpdir):
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     assert db.schema == (
-        "CREATE TABLE [commits] (\n"
+        "CREATE TABLE [commit] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commits_hash]\n"
-        "    ON [commits] ([hash]);\n"
-        "CREATE TABLE [items] (\n"
+        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
+        "    ON [commit] ([hash]);\n"
+        "CREATE TABLE [item] (\n"
         "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item_id] TEXT,\n"
         "   [_id_] INTEGER,\n"
@@ -267,13 +267,13 @@ def test_file_with_reserved_columns(repo, tmpdir):
         "   [rowid_] INTEGER,\n"
         "   [_commit] INTEGER\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_items__item_id]\n"
-        "    ON [items] ([_item_id]);\n"
-        "CREATE TABLE [item_versions] (\n"
+        "CREATE UNIQUE INDEX [idx_item__item_id]\n"
+        "    ON [item] ([_item_id]);\n"
+        "CREATE TABLE [item_version] (\n"
         "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item] INTEGER REFERENCES [items]([_id]),\n"
+        "   [_item] INTEGER REFERENCES [item]([_id]),\n"
         "   [_version] INTEGER,\n"
-        "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
+        "   [_commit] INTEGER REFERENCES [commit]([id]),\n"
         "   [_id_] INTEGER,\n"
         "   [_item_] TEXT,\n"
         "   [_version_] TEXT,\n"
@@ -281,13 +281,13 @@ def test_file_with_reserved_columns(repo, tmpdir):
         "   [rowid_] INTEGER\n"
         ");"
     )
-    item_versions = [
+    item_version = [
         r
         for r in db.query(
-            "select _id_, _item_, _version_, _commit_, rowid_ from item_versions"
+            "select _id_, _item_, _version_, _commit_, rowid_ from item_version"
         )
     ]
-    assert item_versions == [
+    assert item_version == [
         {
             "_id_": 1,
             "_item_": "Gin",
@@ -341,27 +341,27 @@ def test_csv_tsv(repo, tmpdir, file):
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     assert db.schema == (
-        "CREATE TABLE [commits] (\n"
+        "CREATE TABLE [commit] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commits_hash]\n"
-        "    ON [commits] ([hash]);\n"
-        "CREATE TABLE [items] (\n"
+        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
+        "    ON [commit] ([hash]);\n"
+        "CREATE TABLE [item] (\n"
         "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item_id] TEXT,\n"
         "   [TreeID] TEXT,\n"
         "   [name] TEXT,\n"
         "   [_commit] INTEGER\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_items__item_id]\n"
-        "    ON [items] ([_item_id]);\n"
-        "CREATE TABLE [item_versions] (\n"
+        "CREATE UNIQUE INDEX [idx_item__item_id]\n"
+        "    ON [item] ([_item_id]);\n"
+        "CREATE TABLE [item_version] (\n"
         "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item] INTEGER REFERENCES [items]([_id]),\n"
+        "   [_item] INTEGER REFERENCES [item]([_id]),\n"
         "   [_version] INTEGER,\n"
-        "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
+        "   [_commit] INTEGER REFERENCES [commit]([id]),\n"
         "   [TreeID] TEXT,\n"
         "   [name] TEXT\n"
         ");"
@@ -417,5 +417,5 @@ def test_convert(repo, tmpdir, convert, expected_rows):
         )
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
-    rows = [{k: v for k, v in r.items() if k != "_commit"} for r in db["items"].rows]
+    rows = [{k: v for k, v in r.items() if k != "_commit"} for r in db["item"].rows]
     assert rows == expected_rows
