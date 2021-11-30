@@ -50,19 +50,43 @@ This will create a new SQLite database in the `incidents.db` file with two table
 The database schema for this example will look like this:
 
 ```sql
-CREATE TABLE [commit] (
+<!-- [[[cog
+import cog, json
+from git_history import cli
+from click.testing import CliRunner
+from tests.test_git_history import make_repo
+import sqlite_utils
+import tempfile, pathlib
+tmpdir = pathlib.Path(tempfile.mkdtemp())
+db_path = str(tmpdir / "data.db")
+make_repo(tmpdir)
+runner = CliRunner()
+result = runner.invoke(cli.cli, [
+    "file", db_path, str(tmpdir / "repo" / "incidents.json"), "--repo", str(tmpdir / "repo")
+])
+cog.out(sqlite_utils.Database(db_path).schema)
+]]] -->
+CREATE TABLE [namespaces] (
    [id] INTEGER PRIMARY KEY,
+   [name] TEXT
+);
+CREATE UNIQUE INDEX [idx_namespaces_name]
+    ON [namespaces] ([name]);
+CREATE TABLE [commits] (
+   [id] INTEGER PRIMARY KEY,
+   [namespace] INTEGER REFERENCES [namespaces]([id]),
    [hash] TEXT,
    [commit_at] TEXT
 );
-CREATE UNIQUE INDEX [idx_commit_hash]
-    ON [commit] ([hash]);
+CREATE UNIQUE INDEX [idx_commits_namespace_hash]
+    ON [commits] ([namespace], [hash]);
 CREATE TABLE [item] (
    [IncidentID] TEXT,
    [Location] TEXT,
    [Type] TEXT,
-   [_commit] INTEGER REFERENCES [commit]([id])
+   [_commit] INTEGER REFERENCES [commits]([id])
 );
+<!-- [[[end]]] -->
 ```
 
 If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `item` table.
@@ -80,13 +104,29 @@ This will create three tables - `commit`, `item` and `item_version`.
 This time the schema will look like this:
 
 ```sql
-CREATE TABLE [commit] (
+<!-- [[[cog
+db_path2 = str(tmpdir / "data2.db")
+result = runner.invoke(cli.cli, [
+    "file", db_path2, str(tmpdir / "repo" / "incidents.json"),
+    "--repo", str(tmpdir / "repo"),
+    "--id", "IncidentID"
+])
+cog.out(sqlite_utils.Database(db_path2).schema)
+]]] -->
+CREATE TABLE [namespaces] (
    [id] INTEGER PRIMARY KEY,
+   [name] TEXT
+);
+CREATE UNIQUE INDEX [idx_namespaces_name]
+    ON [namespaces] ([name]);
+CREATE TABLE [commits] (
+   [id] INTEGER PRIMARY KEY,
+   [namespace] INTEGER REFERENCES [namespaces]([id]),
    [hash] TEXT,
    [commit_at] TEXT
 );
-CREATE UNIQUE INDEX [idx_commit_hash]
-    ON [commit] ([hash]);
+CREATE UNIQUE INDEX [idx_commits_namespace_hash]
+    ON [commits] ([namespace], [hash]);
 CREATE TABLE [item] (
    [_id] INTEGER PRIMARY KEY,
    [_item_id] TEXT,
@@ -101,11 +141,12 @@ CREATE TABLE [item_version] (
    [_id] INTEGER PRIMARY KEY,
    [_item] INTEGER REFERENCES [item]([_id]),
    [_version] INTEGER,
-   [_commit] INTEGER REFERENCES [commit]([id]),
+   [_commit] INTEGER REFERENCES [commits]([id]),
    [IncidentID] TEXT,
    [Location] TEXT,
    [Type] TEXT
 );
+<!-- [[[end]]] -->
 ```
 
 The `item` table will contain the most recent version of each row, de-duplicated by ID, plus the following additional columns:
@@ -245,3 +286,7 @@ Now install the dependencies and test dependencies:
 To run the tests:
 
     pytest
+
+To update the schema examples in this README file:
+
+    cog -r README.md

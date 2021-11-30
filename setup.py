@@ -32,6 +32,6 @@ setup(
         git-history=git_history.cli:cli
     """,
     install_requires=["click", "GitPython", "sqlite-utils>=3.19"],
-    extras_require={"test": ["pytest"]},
+    extras_require={"test": ["pytest", "cogapp"]},
     python_requires=">=3.6",
 )
