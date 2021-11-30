@@ -158,20 +158,20 @@ def test_file_without_id(repo, tmpdir, namespace):
         ");\n"
         "CREATE UNIQUE INDEX [idx_namespaces_name]\n"
         "    ON [namespaces] ([name]);\n"
-        "CREATE TABLE [commit] (\n"
+        "CREATE TABLE [commits] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
         "   [namespace] INTEGER REFERENCES [namespaces]([id]),\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commit_namespace_hash]\n"
-        "    ON [commit] ([namespace], [hash]);\n"
+        "CREATE UNIQUE INDEX [idx_commits_namespace_hash]\n"
+        "    ON [commits] ([namespace], [hash]);\n"
         "CREATE TABLE [{}] (\n".format(namespace or "item") + "   [item_id] INTEGER,\n"
         "   [name] TEXT,\n"
-        "   [_commit] INTEGER REFERENCES [commit]([id])\n"
+        "   [_commit] INTEGER REFERENCES [commits]([id])\n"
         ");"
     )
-    assert db["commit"].count == 2
+    assert db["commits"].count == 2
     # Should have some duplicates
     assert [(r["item_id"], r["name"]) for r in db[namespace or "item"].rows] == [
         (1, "Gin"),
@@ -211,14 +211,14 @@ def test_file_with_id(repo, tmpdir, namespace):
         ");\n"
         "CREATE UNIQUE INDEX [idx_namespaces_name]\n"
         "    ON [namespaces] ([name]);\n"
-        "CREATE TABLE [commit] (\n"
+        "CREATE TABLE [commits] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
         "   [namespace] INTEGER REFERENCES [namespaces]([id]),\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commit_namespace_hash]\n"
-        "    ON [commit] ([namespace], [hash]);\n"
+        "CREATE UNIQUE INDEX [idx_commits_namespace_hash]\n"
+        "    ON [commits] ([namespace], [hash]);\n"
         "CREATE TABLE [{}] (\n".format(item_table) + "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item_id] TEXT,\n"
         "   [item_id] INTEGER,\n"
@@ -231,12 +231,12 @@ def test_file_with_id(repo, tmpdir, namespace):
         + "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item] INTEGER REFERENCES [{}]([_id]),\n".format(item_table)
         + "   [_version] INTEGER,\n"
-        "   [_commit] INTEGER REFERENCES [commit]([id]),\n"
+        "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT\n"
         ");"
     )
-    assert db["commit"].count == 2
+    assert db["commits"].count == 2
     # Should have no duplicates
     item_version = [
         r
@@ -281,14 +281,14 @@ def test_file_with_reserved_columns(repo, tmpdir):
         );
         CREATE UNIQUE INDEX [idx_namespaces_name]
             ON [namespaces] ([name]);
-        CREATE TABLE [commit] (
+        CREATE TABLE [commits] (
            [id] INTEGER PRIMARY KEY,
            [namespace] INTEGER REFERENCES [namespaces]([id]),
            [hash] TEXT,
            [commit_at] TEXT
         );
-        CREATE UNIQUE INDEX [idx_commit_namespace_hash]
-            ON [commit] ([namespace], [hash]);
+        CREATE UNIQUE INDEX [idx_commits_namespace_hash]
+            ON [commits] ([namespace], [hash]);
         CREATE TABLE [item] (
            [_id] INTEGER PRIMARY KEY,
            [_item_id] TEXT,
@@ -305,7 +305,7 @@ def test_file_with_reserved_columns(repo, tmpdir):
            [_id] INTEGER PRIMARY KEY,
            [_item] INTEGER REFERENCES [item]([_id]),
            [_version] INTEGER,
-           [_commit] INTEGER REFERENCES [commit]([id]),
+           [_commit] INTEGER REFERENCES [commits]([id]),
            [_id_] INTEGER,
            [_item_] TEXT,
            [_version_] TEXT,
@@ -384,14 +384,14 @@ def test_csv_tsv(repo, tmpdir, file):
         );
         CREATE UNIQUE INDEX [idx_namespaces_name]
             ON [namespaces] ([name]);
-        CREATE TABLE [commit] (
+        CREATE TABLE [commits] (
            [id] INTEGER PRIMARY KEY,
            [namespace] INTEGER REFERENCES [namespaces]([id]),
            [hash] TEXT,
            [commit_at] TEXT
         );
-        CREATE UNIQUE INDEX [idx_commit_namespace_hash]
-            ON [commit] ([namespace], [hash]);
+        CREATE UNIQUE INDEX [idx_commits_namespace_hash]
+            ON [commits] ([namespace], [hash]);
         CREATE TABLE [item] (
            [_id] INTEGER PRIMARY KEY,
            [_item_id] TEXT,
@@ -405,7 +405,7 @@ def test_csv_tsv(repo, tmpdir, file):
            [_id] INTEGER PRIMARY KEY,
            [_item] INTEGER REFERENCES [item]([_id]),
            [_version] INTEGER,
-           [_commit] INTEGER REFERENCES [commit]([id]),
+           [_commit] INTEGER REFERENCES [commits]([id]),
            [TreeID] TEXT,
            [name] TEXT
         );

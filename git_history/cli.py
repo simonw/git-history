@@ -175,13 +175,13 @@ def file(
         resolved_filepath,
         branch,
         skip_commits=set(
-            r[0] for r in db.execute("select hash from [commit]").fetchall()
+            r[0] for r in db.execute("select hash from commits").fetchall()
         )
-        if db["commit"].exists()
+        if db["commits"].exists()
         else set(),
         show_progress=not silent,
     ):
-        commit_id = db["commit"].lookup(
+        commit_id = db["commits"].lookup(
             {"namespace": namespace_id, "hash": git_hash},
             {"commit_at": git_commit_at.isoformat()},
             foreign_keys=(("namespace", "namespaces", "id"),),
@@ -317,7 +317,7 @@ def file(
                             column_order=("_item", "_version", "_commit"),
                             foreign_keys=(
                                 ("_item", item_table, "_id"),
-                                ("_commit", "commit", "id"),
+                                ("_commit", "commits", "id"),
                             ),
                         )
                         .last_pk
@@ -330,7 +330,8 @@ def file(
                                 {
                                     "item_version": item_version_id,
                                     "column": db["columns"].lookup(
-                                        {"namespace": namespace_id, "name": column}
+                                        {"namespace": namespace_id, "name": column},
+                                        foreign_keys=(("namespace", "namespaces", "id"),)
                                     ),
                                 },
                                 pk=("item_version", "column"),
@@ -351,7 +352,7 @@ def file(
                 items,
                 column_order=("_id",),
                 alter=True,
-                foreign_keys=(("_commit", "commit", "id"),),
+                foreign_keys=(("_commit", "commits", "id"),),
             )
 
 
