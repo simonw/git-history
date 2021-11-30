@@ -297,7 +297,7 @@ def file(
                         db["item_versions"]
                         .insert(
                             item_version,
-                            pk="id",
+                            pk="_id",
                             alter=True,
                             replace=True,
                             column_order=("_item", "_version", "_commit"),
