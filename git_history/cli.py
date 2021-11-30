@@ -57,6 +57,12 @@ def cli():
     default=".",
     help="Path to Git repo (if not current directory)",
 )
+@click.option(
+    "-n",
+    "--namespace",
+    default="item",
+    help="Used as part of the table names - defaults to item, but can be changed to use one database to store changes to more than one file",
+)
 @click.option("--branch", default="main", help="Git branch to use (defaults to main)")
 @click.option(
     "ids", "--id", multiple=True, help="Columns (can be multiple) to use as an ID"
@@ -100,6 +106,7 @@ def file(
     database,
     filepath,
     repo,
+    namespace,
     branch,
     ids,
     ignore,
@@ -118,6 +125,10 @@ def file(
         raise click.ClickException(
             "--changed can only be used if you specify at least one --id"
         )
+
+    item_table = namespace
+    version_table = "{}_version".format(namespace)
+    changed_table = "{}_changed".format(namespace)
 
     if csv_:
         convert = textwrap.dedent(
@@ -151,7 +162,9 @@ def file(
 
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
+
     db = sqlite_utils.Database(database)
+    namespace_id = db["namespaces"].lookup({"name": namespace})
 
     item_id_to_version = {}
     item_id_to_last_full_hash = {}
@@ -161,14 +174,17 @@ def file(
         resolved_repo,
         resolved_filepath,
         branch,
-        skip_commits=set(r[0] for r in db.execute("select hash from commit").fetchall())
+        skip_commits=set(
+            r[0] for r in db.execute("select hash from [commit]").fetchall()
+        )
         if db["commit"].exists()
         else set(),
         show_progress=not silent,
     ):
         commit_id = db["commit"].lookup(
-            {"hash": git_hash},
+            {"namespace": namespace_id, "hash": git_hash},
             {"commit_at": git_commit_at.isoformat()},
+            foreign_keys=(("namespace", "namespaces", "id"),),
         )
         if not content.strip():
             # Skip empty JSON files
@@ -254,7 +270,7 @@ def file(
 
                     # Add or fetch item
                     item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
-                    item_id = db["item"].lookup(
+                    item_id = db[item_table].lookup(
                         {"_item_id": item_id},
                         item_to_insert,
                         column_order=("_id", "_item_id"),
@@ -292,7 +308,7 @@ def file(
                         )
 
                     item_version_id = (
-                        db["item_version"]
+                        db[version_table]
                         .insert(
                             item_version,
                             pk="_id",
@@ -300,7 +316,7 @@ def file(
                             replace=True,
                             column_order=("_item", "_version", "_commit"),
                             foreign_keys=(
-                                ("_item", "item", "_id"),
+                                ("_item", item_table, "_id"),
                                 ("_commit", "commit", "id"),
                             ),
                         )
@@ -310,15 +326,18 @@ def file(
                     if changed_columns:
                         # Record which columns changed in the changed m2m table
                         for column in changed_columns:
-                            db["changed"].insert(
+                            db[changed_table].insert(
                                 {
                                     "item_version": item_version_id,
-                                    "column": db["columns"].lookup({"name": column}),
+                                    "column": db["columns"].lookup(
+                                        {"namespace": namespace_id, "name": column}
+                                    ),
                                 },
                                 pk=("item_version", "column"),
                                 foreign_keys=(
-                                    ("item_version", "item_version", "id"),
+                                    ("item_version", version_table, "_id"),
                                     ("column", "columns", "id"),
+                                    ("namespace", "namespaces", "id"),
                                 ),
                             )
 
@@ -328,7 +347,7 @@ def file(
                 item = fix_reserved_columns(item)
                 item["_commit"] = commit_id
             # In this case item table needs a foreign key on 'commit'
-            db["item"].insert_all(
+            db[item_table].insert_all(
                 items,
                 column_order=("_id",),
                 alter=True,

@@ -4,6 +4,7 @@ import json
 import pytest
 import subprocess
 import sqlite_utils
+import textwrap
 
 
 @pytest.fixture
@@ -139,32 +140,40 @@ def repo(tmpdir):
     return repo_dir
 
 
-def test_file_without_id(repo, tmpdir):
+@pytest.mark.parametrize("namespace", (None, "custom"))
+def test_file_without_id(repo, tmpdir, namespace):
     runner = CliRunner()
     db_path = str(tmpdir / "db.db")
     with runner.isolated_filesystem():
-        result = runner.invoke(
-            cli, ["file", db_path, str(repo / "items.json"), "--repo", str(repo)]
-        )
+        options = ["file", db_path, str(repo / "items.json"), "--repo", str(repo)]
+        if namespace:
+            options += ["--namespace", namespace]
+        result = runner.invoke(cli, options)
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     assert db.schema == (
+        "CREATE TABLE [namespaces] (\n"
+        "   [id] INTEGER PRIMARY KEY,\n"
+        "   [name] TEXT\n"
+        ");\n"
+        "CREATE UNIQUE INDEX [idx_namespaces_name]\n"
+        "    ON [namespaces] ([name]);\n"
         "CREATE TABLE [commit] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
+        "   [namespace] INTEGER REFERENCES [namespaces]([id]),\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
-        "    ON [commit] ([hash]);\n"
-        "CREATE TABLE [item] (\n"
-        "   [item_id] INTEGER,\n"
+        "CREATE UNIQUE INDEX [idx_commit_namespace_hash]\n"
+        "    ON [commit] ([namespace], [hash]);\n"
+        "CREATE TABLE [{}] (\n".format(namespace or "item") + "   [item_id] INTEGER,\n"
         "   [name] TEXT,\n"
         "   [_commit] INTEGER REFERENCES [commit]([id])\n"
         ");"
     )
     assert db["commit"].count == 2
     # Should have some duplicates
-    assert [(r["item_id"], r["name"]) for r in db["item"].rows] == [
+    assert [(r["item_id"], r["name"]) for r in db[namespace or "item"].rows] == [
         (1, "Gin"),
         (2, "Tonic"),
         (1, "Gin"),
@@ -173,7 +182,8 @@ def test_file_without_id(repo, tmpdir):
     ]
 
 
-def test_file_with_id(repo, tmpdir):
+@pytest.mark.parametrize("namespace", (None, "custom"))
+def test_file_with_id(repo, tmpdir, namespace):
     runner = CliRunner()
     db_path = str(tmpdir / "db.db")
     with runner.isolated_filesystem():
@@ -187,31 +197,40 @@ def test_file_with_id(repo, tmpdir):
                 str(repo),
                 "--id",
                 "item_id",
-            ],
+            ]
+            + (["--namespace", namespace] if namespace else []),
         )
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
+    item_table = namespace or "item"
+    version_table = "{}_version".format(item_table)
     assert db.schema == (
+        "CREATE TABLE [namespaces] (\n"
+        "   [id] INTEGER PRIMARY KEY,\n"
+        "   [name] TEXT\n"
+        ");\n"
+        "CREATE UNIQUE INDEX [idx_namespaces_name]\n"
+        "    ON [namespaces] ([name]);\n"
         "CREATE TABLE [commit] (\n"
         "   [id] INTEGER PRIMARY KEY,\n"
+        "   [namespace] INTEGER REFERENCES [namespaces]([id]),\n"
         "   [hash] TEXT,\n"
         "   [commit_at] TEXT\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
-        "    ON [commit] ([hash]);\n"
-        "CREATE TABLE [item] (\n"
-        "   [_id] INTEGER PRIMARY KEY,\n"
+        "CREATE UNIQUE INDEX [idx_commit_namespace_hash]\n"
+        "    ON [commit] ([namespace], [hash]);\n"
+        "CREATE TABLE [{}] (\n".format(item_table) + "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item_id] TEXT,\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT,\n"
         "   [_commit] INTEGER\n"
         ");\n"
-        "CREATE UNIQUE INDEX [idx_item__item_id]\n"
-        "    ON [item] ([_item_id]);\n"
-        "CREATE TABLE [item_version] (\n"
-        "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item] INTEGER REFERENCES [item]([_id]),\n"
-        "   [_version] INTEGER,\n"
+        "CREATE UNIQUE INDEX [idx_{}__item_id]\n".format(item_table)
+        + "    ON [{}] ([_item_id]);\n".format(item_table)
+        + "CREATE TABLE [{}] (\n".format(version_table)
+        + "   [_id] INTEGER PRIMARY KEY,\n"
+        "   [_item] INTEGER REFERENCES [{}]([_id]),\n".format(item_table)
+        + "   [_version] INTEGER,\n"
         "   [_commit] INTEGER REFERENCES [commit]([id]),\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT\n"
@@ -220,7 +239,10 @@ def test_file_with_id(repo, tmpdir):
     assert db["commit"].count == 2
     # Should have no duplicates
     item_version = [
-        r for r in db.query("select item_id, _version, name from item_version")
+        r
+        for r in db.query(
+            "select item_id, _version, name from {}".format(version_table)
+        )
     ]
     assert item_version == [
         {"item_id": 1, "_version": 1, "name": "Gin"},
@@ -249,37 +271,49 @@ def test_file_with_reserved_columns(repo, tmpdir):
         )
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
-    assert db.schema == (
-        "CREATE TABLE [commit] (\n"
-        "   [id] INTEGER PRIMARY KEY,\n"
-        "   [hash] TEXT,\n"
-        "   [commit_at] TEXT\n"
-        ");\n"
-        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
-        "    ON [commit] ([hash]);\n"
-        "CREATE TABLE [item] (\n"
-        "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item_id] TEXT,\n"
-        "   [_id_] INTEGER,\n"
-        "   [_item_] TEXT,\n"
-        "   [_version_] TEXT,\n"
-        "   [_commit_] TEXT,\n"
-        "   [rowid_] INTEGER,\n"
-        "   [_commit] INTEGER\n"
-        ");\n"
-        "CREATE UNIQUE INDEX [idx_item__item_id]\n"
-        "    ON [item] ([_item_id]);\n"
-        "CREATE TABLE [item_version] (\n"
-        "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item] INTEGER REFERENCES [item]([_id]),\n"
-        "   [_version] INTEGER,\n"
-        "   [_commit] INTEGER REFERENCES [commit]([id]),\n"
-        "   [_id_] INTEGER,\n"
-        "   [_item_] TEXT,\n"
-        "   [_version_] TEXT,\n"
-        "   [_commit_] TEXT,\n"
-        "   [rowid_] INTEGER\n"
-        ");"
+    assert (
+        db.schema
+        == textwrap.dedent(
+            """
+        CREATE TABLE [namespaces] (
+           [id] INTEGER PRIMARY KEY,
+           [name] TEXT
+        );
+        CREATE UNIQUE INDEX [idx_namespaces_name]
+            ON [namespaces] ([name]);
+        CREATE TABLE [commit] (
+           [id] INTEGER PRIMARY KEY,
+           [namespace] INTEGER REFERENCES [namespaces]([id]),
+           [hash] TEXT,
+           [commit_at] TEXT
+        );
+        CREATE UNIQUE INDEX [idx_commit_namespace_hash]
+            ON [commit] ([namespace], [hash]);
+        CREATE TABLE [item] (
+           [_id] INTEGER PRIMARY KEY,
+           [_item_id] TEXT,
+           [_id_] INTEGER,
+           [_item_] TEXT,
+           [_version_] TEXT,
+           [_commit_] TEXT,
+           [rowid_] INTEGER,
+           [_commit] INTEGER
+        );
+        CREATE UNIQUE INDEX [idx_item__item_id]
+            ON [item] ([_item_id]);
+        CREATE TABLE [item_version] (
+           [_id] INTEGER PRIMARY KEY,
+           [_item] INTEGER REFERENCES [item]([_id]),
+           [_version] INTEGER,
+           [_commit] INTEGER REFERENCES [commit]([id]),
+           [_id_] INTEGER,
+           [_item_] TEXT,
+           [_version_] TEXT,
+           [_commit_] TEXT,
+           [rowid_] INTEGER
+        );
+        """
+        ).strip()
     )
     item_version = [
         r
@@ -340,31 +374,43 @@ def test_csv_tsv(repo, tmpdir, file):
         )
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
-    assert db.schema == (
-        "CREATE TABLE [commit] (\n"
-        "   [id] INTEGER PRIMARY KEY,\n"
-        "   [hash] TEXT,\n"
-        "   [commit_at] TEXT\n"
-        ");\n"
-        "CREATE UNIQUE INDEX [idx_commit_hash]\n"
-        "    ON [commit] ([hash]);\n"
-        "CREATE TABLE [item] (\n"
-        "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item_id] TEXT,\n"
-        "   [TreeID] TEXT,\n"
-        "   [name] TEXT,\n"
-        "   [_commit] INTEGER\n"
-        ");\n"
-        "CREATE UNIQUE INDEX [idx_item__item_id]\n"
-        "    ON [item] ([_item_id]);\n"
-        "CREATE TABLE [item_version] (\n"
-        "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item] INTEGER REFERENCES [item]([_id]),\n"
-        "   [_version] INTEGER,\n"
-        "   [_commit] INTEGER REFERENCES [commit]([id]),\n"
-        "   [TreeID] TEXT,\n"
-        "   [name] TEXT\n"
-        ");"
+    assert (
+        db.schema
+        == textwrap.dedent(
+            """
+        CREATE TABLE [namespaces] (
+           [id] INTEGER PRIMARY KEY,
+           [name] TEXT
+        );
+        CREATE UNIQUE INDEX [idx_namespaces_name]
+            ON [namespaces] ([name]);
+        CREATE TABLE [commit] (
+           [id] INTEGER PRIMARY KEY,
+           [namespace] INTEGER REFERENCES [namespaces]([id]),
+           [hash] TEXT,
+           [commit_at] TEXT
+        );
+        CREATE UNIQUE INDEX [idx_commit_namespace_hash]
+            ON [commit] ([namespace], [hash]);
+        CREATE TABLE [item] (
+           [_id] INTEGER PRIMARY KEY,
+           [_item_id] TEXT,
+           [TreeID] TEXT,
+           [name] TEXT,
+           [_commit] INTEGER
+        );
+        CREATE UNIQUE INDEX [idx_item__item_id]
+            ON [item] ([_item_id]);
+        CREATE TABLE [item_version] (
+           [_id] INTEGER PRIMARY KEY,
+           [_item] INTEGER REFERENCES [item]([_id]),
+           [_version] INTEGER,
+           [_commit] INTEGER REFERENCES [commit]([id]),
+           [TreeID] TEXT,
+           [name] TEXT
+        );
+        """
+        ).strip()
     )
 
 
