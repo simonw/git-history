@@ -209,12 +209,12 @@ def test_file_with_id(repo, tmpdir):
         "CREATE UNIQUE INDEX [idx_items__item_id]\n"
         "    ON [items] ([_item_id]);\n"
         "CREATE TABLE [item_versions] (\n"
+        "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item] INTEGER REFERENCES [items]([_id]),\n"
         "   [_version] INTEGER,\n"
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
         "   [item_id] INTEGER,\n"
-        "   [name] TEXT,\n"
-        "   PRIMARY KEY ([_item], [_version])\n"
+        "   [name] TEXT\n"
         ");"
     )
     assert db["commits"].count == 2
@@ -270,6 +270,7 @@ def test_file_with_reserved_columns(repo, tmpdir):
         "CREATE UNIQUE INDEX [idx_items__item_id]\n"
         "    ON [items] ([_item_id]);\n"
         "CREATE TABLE [item_versions] (\n"
+        "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item] INTEGER REFERENCES [items]([_id]),\n"
         "   [_version] INTEGER,\n"
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
@@ -277,8 +278,7 @@ def test_file_with_reserved_columns(repo, tmpdir):
         "   [_item_] TEXT,\n"
         "   [_version_] TEXT,\n"
         "   [_commit_] TEXT,\n"
-        "   [rowid_] INTEGER,\n"
-        "   PRIMARY KEY ([_item], [_version])\n"
+        "   [rowid_] INTEGER\n"
         ");"
     )
     item_versions = [
@@ -358,12 +358,12 @@ def test_csv_tsv(repo, tmpdir, file):
         "CREATE UNIQUE INDEX [idx_items__item_id]\n"
         "    ON [items] ([_item_id]);\n"
         "CREATE TABLE [item_versions] (\n"
+        "   [_id] INTEGER PRIMARY KEY,\n"
         "   [_item] INTEGER REFERENCES [items]([_id]),\n"
         "   [_version] INTEGER,\n"
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
         "   [TreeID] TEXT,\n"
-        "   [name] TEXT,\n"
-        "   PRIMARY KEY ([_item], [_version])\n"
+        "   [name] TEXT\n"
         ");"
     )
 
