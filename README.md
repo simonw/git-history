@@ -49,7 +49,6 @@ This will create a new SQLite database in the `incidents.db` file with two table
 
 The database schema for this example will look like this:
 
-```sql
 <!-- [[[cog
 import cog, json
 from git_history import cli
@@ -64,8 +63,11 @@ runner = CliRunner()
 result = runner.invoke(cli.cli, [
     "file", db_path, str(tmpdir / "repo" / "incidents.json"), "--repo", str(tmpdir / "repo")
 ])
+cog.out("```sql\n")
 cog.out(sqlite_utils.Database(db_path).schema)
+cog.out("\n```")
 ]]] -->
+```sql
 CREATE TABLE [namespaces] (
    [id] INTEGER PRIMARY KEY,
    [name] TEXT
@@ -86,8 +88,8 @@ CREATE TABLE [item] (
    [Type] TEXT,
    [_commit] INTEGER REFERENCES [commits]([id])
 );
-<!-- [[[end]]] -->
 ```
+<!-- [[[end]]] -->
 
 If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `item` table.
 
@@ -103,7 +105,6 @@ This will create three tables - `commit`, `item` and `item_version`.
 
 This time the schema will look like this:
 
-```sql
 <!-- [[[cog
 db_path2 = str(tmpdir / "data2.db")
 result = runner.invoke(cli.cli, [
@@ -111,8 +112,11 @@ result = runner.invoke(cli.cli, [
     "--repo", str(tmpdir / "repo"),
     "--id", "IncidentID"
 ])
+cog.out("```sql\n")
 cog.out(sqlite_utils.Database(db_path2).schema)
+cog.out("\n```")
 ]]] -->
+```sql
 CREATE TABLE [namespaces] (
    [id] INTEGER PRIMARY KEY,
    [name] TEXT
@@ -146,8 +150,8 @@ CREATE TABLE [item_version] (
    [Location] TEXT,
    [Type] TEXT
 );
-<!-- [[[end]]] -->
 ```
+<!-- [[[end]]] -->
 
 The `item` table will contain the most recent version of each row, de-duplicated by ID, plus the following additional columns:
 
