@@ -183,6 +183,17 @@ def file(
     item_id_to_last_full_hash = {}
     item_id_to_previous_version = {}
 
+    column_name_to_id = {}
+
+    def column_id(column):
+        if column not in column_name_to_id:
+            id = db["columns"].lookup(
+                {"namespace": namespace_id, "name": column},
+                foreign_keys=(("namespace", "namespaces", "id"),),
+            )
+            column_name_to_id[column] = id
+        return column_name_to_id[column]
+
     for git_commit_at, git_hash, content in iterate_file_versions(
         resolved_repo,
         resolved_filepath,
@@ -338,24 +349,21 @@ def file(
 
                     if changed_columns:
                         # Record which columns changed in the changed m2m table
-                        for column in changed_columns:
-                            db[changed_table].insert(
+                        db[changed_table].insert_all(
+                            (
                                 {
                                     "item_version": item_version_id,
-                                    "column": db["columns"].lookup(
-                                        {"namespace": namespace_id, "name": column},
-                                        foreign_keys=(
-                                            ("namespace", "namespaces", "id"),
-                                        ),
-                                    ),
-                                },
-                                pk=("item_version", "column"),
-                                foreign_keys=(
-                                    ("item_version", version_table, "_id"),
-                                    ("column", "columns", "id"),
-                                    ("namespace", "namespaces", "id"),
-                                ),
-                            )
+                                    "column": column_id(column),
+                                }
+                                for column in changed_columns
+                            ),
+                            pk=("item_version", "column"),
+                            foreign_keys=(
+                                ("item_version", version_table, "_id"),
+                                ("column", "columns", "id"),
+                                ("namespace", "namespaces", "id"),
+                            ),
+                        )
 
         else:
             # no --id - so just correct for reserved columns and add item["_commit"]
