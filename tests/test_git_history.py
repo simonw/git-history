@@ -438,6 +438,41 @@ def test_csv_tsv(repo, tmpdir, file):
 
 
 @pytest.mark.parametrize(
+    "dialect,expected_schema",
+    (
+        (
+            "excel",
+            "CREATE TABLE [item] (\n   [TreeID] TEXT,\n   [name] TEXT,\n   [_commit] INTEGER REFERENCES [commits]([id])\n)",
+        ),
+        (
+            "excel-tab",
+            "CREATE TABLE [item] (\n   [TreeID,name] TEXT,\n   [_commit] INTEGER REFERENCES [commits]([id])\n)",
+        ),
+    ),
+)
+def test_csv_dialect(repo, tmpdir, dialect, expected_schema):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / "trees.csv"),
+                "--repo",
+                str(repo),
+                "--dialect",
+                dialect,
+            ],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    assert db["item"].schema == expected_schema
+
+
+@pytest.mark.parametrize(
     "convert,expected_rows",
     (
         (

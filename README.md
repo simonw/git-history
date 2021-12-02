@@ -174,6 +174,7 @@ Additional options:
 - `--id TEXT` - as described above: pass one or more columns that uniquely identify a record, so that changes to that record can be calculated over time.
 - `--ignore TEXT` - one or more columns to ignore - they will not be included in the resulting database.
 - `--csv` - treat the data is CSV or TSV rather than JSON, and attempt to guess the correct dialect
+- `--dialect` - use a spcific CSV dialect. Options are `excel`, `excel-tab` and `unix` - see [the Python CSV documentation](https://docs.python.org/3/library/csv.html#csv.excel) for details.
 - `--convert TEXT` - custom Python code for a conversion, see below.
 - `--import TEXT` - Python modules to import for `--convert`.
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.

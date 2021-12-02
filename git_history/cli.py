@@ -81,6 +81,11 @@ def cli():
     help="Expect CSV/TSV data, not JSON",
 )
 @click.option(
+    "--dialect",
+    type=click.Choice(["excel", "excel-tab", "unix"]),
+    help="CSV dialect to use - default is to auto-detect",
+)
+@click.option(
     "--convert",
     help="Python code to read each file version content and return it as a list of dicts. Defaults to json.parse(content)",
 )
@@ -112,6 +117,7 @@ def file(
     ignore,
     changed_mode,
     csv_,
+    dialect,
     convert,
     imports,
     ignore_duplicate_ids,
@@ -120,6 +126,9 @@ def file(
     "Analyze the history of a specific file and write it to SQLite"
     if csv_ and convert:
         raise click.ClickException("Cannot use both --csv and --convert")
+
+    if dialect:
+        csv_ = True
 
     if changed_mode and not ids:
         raise click.ClickException(
@@ -134,10 +143,14 @@ def file(
         convert = textwrap.dedent(
             """
             decoded = content.decode("utf-8")
-            dialect = csv.Sniffer().sniff(decoded[:512])
+            dialect = {}
             reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
             return reader
-        """
+        """.format(
+                '"{}"'.format(dialect)
+                if dialect
+                else "csv.Sniffer().sniff(decoded[:1024])"
+            )
         )
         imports = ["io", "csv"]
 
