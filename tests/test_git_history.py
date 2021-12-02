@@ -539,9 +539,14 @@ def test_convert(repo, tmpdir, convert, expected_rows):
         ([], ["1", "2", "3"]),
         (["--skip", 0], ["2", "3"]),
         (["--skip", 0, "--skip", 2], ["3"]),
+        (["--start-at", 2], ["2", "3"]),
+        (["--start-after", 2], ["3"]),
+        (["--start-at", 3], ["3"]),
+        (["--start-after", 3], []),
     ),
 )
 def test_skip_options(repo, tmpdir, options, expected_texts):
+    runner = CliRunner()
     commits = list(
         reversed(
             subprocess.check_output(["git", "log", "--pretty=format:%H"], cwd=str(repo))
@@ -550,7 +555,6 @@ def test_skip_options(repo, tmpdir, options, expected_texts):
         )
     )
     assert len(commits) == 4
-    runner = CliRunner()
     # Rewrite options to replace integers with the corresponding commit hash
     options = [commits[item] if isinstance(item, int) else item for item in options]
     db_path = str(tmpdir / "db.db")

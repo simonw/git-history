@@ -67,6 +67,10 @@ def cli():
 @click.option(
     "ids", "--id", multiple=True, help="Columns (can be multiple) to use as an ID"
 )
+@click.option("--start-at", help="Skip commits prior to this one")
+@click.option(
+    "--start-after", help="Skip commits up to this one, then start at the next one"
+)
 @click.option(
     "skip_hashes", "--skip", multiple=True, help="Skip specific commit hashes"
 )
@@ -118,6 +122,8 @@ def file(
     branch,
     ids,
     ignore,
+    start_at,
+    start_after,
     skip_hashes,
     changed_mode,
     csv_,
@@ -133,6 +139,11 @@ def file(
 
     if dialect:
         csv_ = True
+
+    if start_at and start_after:
+        raise click.ClickException(
+            "Cannot use --start-at and --start-after at the same time"
+        )
 
     if changed_mode and not ids:
         raise click.ClickException(
@@ -207,6 +218,8 @@ def file(
             column_name_to_id[column] = id
         return column_name_to_id[column]
 
+    can_proceed = not (start_after or start_at)
+
     for git_commit_at, git_hash, content in iterate_file_versions(
         resolved_repo,
         resolved_filepath,
@@ -214,6 +227,16 @@ def file(
         commits_to_skip=commits_to_skip,
         show_progress=not silent,
     ):
+        if not can_proceed:
+            if git_hash == start_after:
+                can_proceed = True
+                # But skip this one and start at the next one
+                continue
+            elif git_hash == start_at:
+                can_proceed = True
+            else:
+                continue
+
         commit_id = db["commits"].lookup(
             {"namespace": namespace_id, "hash": git_hash},
             {"commit_at": git_commit_at.isoformat()},
