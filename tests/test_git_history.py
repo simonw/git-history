@@ -214,6 +214,104 @@ def test_file_without_id(repo, tmpdir, namespace):
 
 
 @pytest.mark.parametrize("namespace", (None, "custom"))
+def test_file_with_id(repo, tmpdir, namespace):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / "items.json"),
+                "--repo",
+                str(repo),
+                "--id",
+                "item_id",
+            ]
+            + (["--namespace", namespace] if namespace else []),
+        )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    item_table = namespace or "item"
+    version_table = "{}_version".format(item_table)
+    assert (
+        db.schema
+        == """
+CREATE TABLE [namespaces] (
+   [id] INTEGER PRIMARY KEY,
+   [name] TEXT
+);
+CREATE UNIQUE INDEX [idx_namespaces_name]
+    ON [namespaces] ([name]);
+CREATE TABLE [commits] (
+   [id] INTEGER PRIMARY KEY,
+   [namespace] INTEGER REFERENCES [namespaces]([id]),
+   [hash] TEXT,
+   [commit_at] TEXT
+);
+CREATE UNIQUE INDEX [idx_commits_namespace_hash]
+    ON [commits] ([namespace], [hash]);
+CREATE TABLE [{namespace}] (
+   [_id] INTEGER PRIMARY KEY,
+   [_item_id] TEXT,
+   [item_id] INTEGER,
+   [name] TEXT,
+   [_commit] INTEGER
+);
+CREATE UNIQUE INDEX [idx_{namespace}__item_id]
+    ON [{namespace}] ([_item_id]);
+CREATE TABLE [{namespace}_version] (
+   [_id] INTEGER PRIMARY KEY,
+   [_item] INTEGER REFERENCES [{namespace}]([_id]),
+   [_version] INTEGER,
+   [_commit] INTEGER REFERENCES [commits]([id]),
+   [item_id] INTEGER,
+   [name] TEXT,
+   [_item_full_hash] TEXT
+);
+CREATE TABLE [columns] (
+   [id] INTEGER PRIMARY KEY,
+   [namespace] INTEGER REFERENCES [namespaces]([id]),
+   [name] TEXT
+);
+CREATE UNIQUE INDEX [idx_columns_namespace_name]
+    ON [columns] ([namespace], [name]);
+CREATE TABLE [{namespace}_changed] (
+   [item_version] INTEGER REFERENCES [{namespace}_version]([_id]),
+   [column] INTEGER REFERENCES [columns]([id]),
+   PRIMARY KEY ([item_version], [column])
+);""".strip().format(
+            namespace=namespace or "item"
+        )
+    )
+    assert db["commits"].count == 2
+    # Should have no duplicates
+    item_version = [
+        r
+        for r in db.query(
+            "select item_id, _version, name from {}".format(version_table)
+        )
+    ]
+    assert item_version == [
+        {"item_id": 1, "_version": 1, "name": "Gin"},
+        {"item_id": 2, "_version": 1, "name": "Tonic"},
+        # item_id is None because it did not change here
+        {"item_id": None, "_version": 2, "name": "Tonic 2"},
+        {"item_id": 3, "_version": 1, "name": "Rum"},
+    ]
+    assert [r for r in db["{}_changed".format(namespace or "item")].rows] == [
+        {"item_version": 1, "column": 1},
+        {"item_version": 1, "column": 2},
+        {"item_version": 2, "column": 1},
+        {"item_version": 2, "column": 2},
+        {"item_version": 3, "column": 2},
+        {"item_version": 4, "column": 1},
+        {"item_version": 4, "column": 2},
+    ]
+
+
+@pytest.mark.parametrize("namespace", (None, "custom"))
 def test_file_with_id_full_versions(repo, tmpdir, namespace):
     runner = CliRunner()
     db_path = str(tmpdir / "db.db")
