@@ -167,7 +167,11 @@ The `item_version` table will contain a row for each captured differing version 
 
 If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
 
-Additional options:
+Note that `_id`, `_item`, `_version`, `_commit` and `rowid` are considered column names for the purposes of this tool. If your data contains any of these they will be renamed to `_id_`, `_item_`, `_version_`, `_commit_` or `_rowid_` to avoid clashing with the reserved columns.
+
+If you have a column with a name such as `_commit_` it will be renamed too, adding an additional trailing underscore, so `_commit_` becomes `_commit__` and `_commit__` becomes `_commit__`.
+
+### Additional options
 
 - `--repo DIRECTORY` - the path to the Git repository, if it is not the current working directory.
 - `--branch TEXT` - the Git branch to analyze - defaults to `main`.
@@ -180,10 +184,6 @@ Additional options:
 - `--import TEXT` - Python modules to import for `--convert`.
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
 - `--silent` - don't show the progress bar.
-
-Note that `_id`, `_item`, `_version`, `_commit` and `rowid` are considered column names for the purposes of this tool. If your data contains any of these they will be renamed to `_id_`, `_item_`, `_version_`, `_commit_` or `_rowid_` to avoid clashing with the reserved columns.
-
-If you have a column with a name such as `_commit_` it will be renamed too, adding an additional trailing underscore, so `_commit_` becomes `_commit__` and `_commit__` becomes `_commit__`.
 
 ### CSV and TSV data
 
