@@ -200,6 +200,7 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 - `--convert TEXT` - custom Python code for a conversion, described below.
 - `--import TEXT` - additional Python modules to import for `--convert`.
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
+- `--namespace TEXT` - use this if you wish to include the history of multiple different files in the same database. The default is `item` but you can set it to something else, which will produce tables with names like `yournamespace` and `yournamespace_version`.
 - `--silent` - don't show the progress bar.
 
 ### CSV and TSV data
