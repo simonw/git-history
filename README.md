@@ -15,7 +15,7 @@ Install this tool using `pip`:
 
 ## Usage
 
-This tool can be run against a Git repository that holds a file that contains JSON, CSV/TSV or some other format and which has multiple versions tracked in the Git history. See [Git scraping](https://simonwillison.net/2020/Oct/9/git-scraping/) to understand how you might create such a repository.
+This tool can be run against a Git repository that holds a file that contains JSON, CSV/TSV or some other format and which has multiple versions tracked in the Git history. Read [Git scraping: track changes over time by scraping to a Git repository](https://simonwillison.net/2020/Oct/9/git-scraping/) to understand how you might create such a repository.
 
 The `file` command analyzes the history of an individual file within the repository, and generates a SQLite database table that represents the different versions of that file over time.
 
@@ -148,7 +148,20 @@ CREATE TABLE [item_version] (
    [_commit] INTEGER REFERENCES [commits]([id]),
    [IncidentID] TEXT,
    [Location] TEXT,
-   [Type] TEXT
+   [Type] TEXT,
+   [_item_full_hash] TEXT
+);
+CREATE TABLE [columns] (
+   [id] INTEGER PRIMARY KEY,
+   [namespace] INTEGER REFERENCES [namespaces]([id]),
+   [name] TEXT
+);
+CREATE UNIQUE INDEX [idx_columns_namespace_name]
+    ON [columns] ([namespace], [name]);
+CREATE TABLE [item_changed] (
+   [item_version] INTEGER REFERENCES [item_version]([_id]),
+   [column] INTEGER REFERENCES [columns]([id]),
+   PRIMARY KEY ([item_version], [column])
 );
 ```
 <!-- [[[end]]] -->
@@ -161,13 +174,14 @@ The `item` table will contain the most recent version of each row, de-duplicated
 
 The `item_version` table will contain a row for each captured differing version of that item, plus the following columns:
 
+- `_id` - a numeric ID for the item version record.
 - `_item` - a foreign key to the `item` table.
 - `_version` - the numeric version number, starting at 1 and incrementing for each captured version.
 - `_commit` - a foreign key to the `commit` table.
 
 If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
 
-Note that `_id`, `_item`, `_version`, `_commit` and `rowid` are considered column names for the purposes of this tool. If your data contains any of these they will be renamed to `_id_`, `_item_`, `_version_`, `_commit_` or `_rowid_` to avoid clashing with the reserved columns.
+Note that `_id`, `_item`, `_item_id`, `_version`, `_commit` and `rowid` are considered column names for the purposes of this tool. If your data contains any of these they will be renamed to `_id_`, `_item_`, `_version_`, `_commit_` or `_rowid_` to avoid clashing with the reserved columns.
 
 If you have a column with a name such as `_commit_` it will be renamed too, adding an additional trailing underscore, so `_commit_` becomes `_commit__` and `_commit__` becomes `_commit__`.
 
@@ -176,14 +190,15 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 - `--repo DIRECTORY` - the path to the Git repository, if it is not the current working directory.
 - `--branch TEXT` - the Git branch to analyze - defaults to `main`.
 - `--id TEXT` - as described above: pass one or more columns that uniquely identify a record, so that changes to that record can be calculated over time.
+- `--full-versions` - instead of recording just the columns that have changed in the `item_version` table record a full copy of each version of theh item.
 - `--ignore TEXT` - one or more columns to ignore - they will not be included in the resulting database.
 - `--csv` - treat the data is CSV or TSV rather than JSON, and attempt to guess the correct dialect
 - `--dialect` - use a spcific CSV dialect. Options are `excel`, `excel-tab` and `unix` - see [the Python CSV documentation](https://docs.python.org/3/library/csv.html#csv.excel) for details.
 - `--skip TEXT` - one or more full Git commit hashes that should be skipped. You can use this if some of the data in your revision history is corrupted in a way that prevents this tool from working.
 - `--start-at TEXT` - skip commits prior to the specified commit hash.
 - `--start-after TEXT` - skip commits up to and including the specified commit hash, then start processing from the following commit.
-- `--convert TEXT` - custom Python code for a conversion, see below.
-- `--import TEXT` - Python modules to import for `--convert`.
+- `--convert TEXT` - custom Python code for a conversion, described below.
+- `--import TEXT` - additional Python modules to import for `--convert`.
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
 - `--silent` - don't show the progress bar.
 
@@ -192,6 +207,8 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 If the data in your repository is a CSV or TSV file you can process it by adding the `--csv` option. This will attempt to detect which delimiter is used by the file, so the same option works for both comma- and tab-separated values.
 
     git-history file trees.db trees.csv --id TreeID
+
+You can also specify the CSV dialect using the `--dialect` option.
 
 ### Custom conversions using --convert
 

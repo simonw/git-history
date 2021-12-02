@@ -75,10 +75,9 @@ def cli():
     "skip_hashes", "--skip", multiple=True, help="Skip specific commit hashes"
 )
 @click.option(
-    "changed_mode",
-    "--changed",
+    "--full-versions",
     is_flag=True,
-    help="Only write column values that item_version that changed since the previous version",
+    help="Record full copies in the item_version table, not just the columns that changed since the previous version",
 )
 @click.option("ignore", "--ignore", multiple=True, help="Columns to ignore")
 @click.option(
@@ -125,7 +124,7 @@ def file(
     start_at,
     start_after,
     skip_hashes,
-    changed_mode,
+    full_versions,
     csv_,
     dialect,
     convert,
@@ -143,11 +142,6 @@ def file(
     if start_at and start_after:
         raise click.ClickException(
             "Cannot use --start-at and --start-after at the same time"
-        )
-
-    if changed_mode and not ids:
-        raise click.ClickException(
-            "--changed can only be used if you specify at least one --id"
         )
 
     db = sqlite_utils.Database(database)
@@ -333,8 +327,13 @@ def file(
                         pk="_id",
                     )
 
-                    # In changed_mode we also track which columns changed
-                    if changed_mode:
+                    if full_versions:
+                        # Record full copies in item_version
+                        item_version = dict(
+                            item, _item=item_id, _version=version, _commit=commit_id
+                        )
+                    else:
+                        # Only record the columns that have changed
                         previous_item = item_id_to_previous_version.get(item_id)
 
                         if previous_item is None:
@@ -357,10 +356,6 @@ def file(
                             _commit=commit_id,
                             _item_full_hash=item_full_hash,
                             # _item_full = json.dumps(item, default=repr),
-                        )
-                    else:
-                        item_version = dict(
-                            item, _item=item_id, _version=version, _commit=commit_id
                         )
 
                     item_version_id = (

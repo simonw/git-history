@@ -214,7 +214,7 @@ def test_file_without_id(repo, tmpdir, namespace):
 
 
 @pytest.mark.parametrize("namespace", (None, "custom"))
-def test_file_with_id(repo, tmpdir, namespace):
+def test_file_with_id_full_versions(repo, tmpdir, namespace):
     runner = CliRunner()
     db_path = str(tmpdir / "db.db")
     with runner.isolated_filesystem():
@@ -228,6 +228,7 @@ def test_file_with_id(repo, tmpdir, namespace):
                 str(repo),
                 "--id",
                 "item_id",
+                "--full-versions",
             ]
             + (["--namespace", namespace] if namespace else []),
         )
@@ -297,6 +298,7 @@ def test_file_with_reserved_columns(repo, tmpdir):
                 str(repo),
                 "--id",
                 "_id",
+                "--full-versions",
             ],
             catch_exceptions=False,
         )
@@ -400,6 +402,7 @@ def test_csv_tsv(repo, tmpdir, file):
                 "--id",
                 "TreeID",
                 "--csv",
+                "--full-versions",
             ],
             catch_exceptions=False,
         )
