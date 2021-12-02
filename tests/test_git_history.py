@@ -83,6 +83,7 @@ def make_repo(tmpdir):
         "TreeID\tname\n1\tSophia\n2\tCharlie",
         "utf-8",
     )
+    (repo_dir / "increment.txt").write_text("1", "utf-8")
     git_commit = [
         "git",
         "-c",
@@ -102,6 +103,7 @@ def make_repo(tmpdir):
             "items-with-banned-columns.json",
             "trees.csv",
             "trees.tsv",
+            "increment.txt",
         ],
         cwd=str(repo_dir),
     )
@@ -155,6 +157,12 @@ def make_repo(tmpdir):
         "utf-8",
     )
     subprocess.call(git_commit + ["-m", "second", "-a"], cwd=str(repo_dir))
+    # Three more commits to test --skip
+    for i in range(2, 4):
+        (repo_dir / "increment.txt").write_text(str(i), "utf-8")
+        subprocess.call(
+            git_commit + ["-m", "increment {}".format(i), "-a"], cwd=str(repo_dir)
+        )
     return repo_dir
 
 
@@ -523,3 +531,46 @@ def test_convert(repo, tmpdir, convert, expected_rows):
     db = sqlite_utils.Database(db_path)
     rows = [{k: v for k, v in r.items() if k != "_commit"} for r in db["item"].rows]
     assert rows == expected_rows
+
+
+@pytest.mark.parametrize(
+    "options,expected_texts",
+    (
+        ([], ["1", "2", "3"]),
+        (["--skip", 0], ["2", "3"]),
+        (["--skip", 0, "--skip", 2], ["3"]),
+    ),
+)
+def test_skip_options(repo, tmpdir, options, expected_texts):
+    commits = list(
+        reversed(
+            subprocess.check_output(["git", "log", "--pretty=format:%H"], cwd=str(repo))
+            .decode("utf-8")
+            .split("\n")
+        )
+    )
+    assert len(commits) == 4
+    runner = CliRunner()
+    # Rewrite options to replace integers with the corresponding commit hash
+    options = [commits[item] if isinstance(item, int) else item for item in options]
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo / "increment.txt"),
+            "--repo",
+            str(repo),
+            "--convert",
+            '[{"id": 1, "text": content.decode("utf-8")}]',
+            "--id",
+            "id",
+        ]
+        + options,
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    actual_text = [r["text"] for r in db["item_version"].rows]
+    assert actual_text == expected_texts

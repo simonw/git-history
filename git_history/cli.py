@@ -9,16 +9,16 @@ from .utils import fix_reserved_columns
 
 
 def iterate_file_versions(
-    repo_path, filepath, ref="main", skip_commits=None, show_progress=False
+    repo_path, filepath, ref="main", commits_to_skip=None, show_progress=False
 ):
     relative_path = str(Path(filepath).relative_to(repo_path))
     repo = git.Repo(repo_path, odbt=git.GitDB)
     commits = reversed(list(repo.iter_commits(ref, paths=[relative_path])))
     progress_bar = None
-    if skip_commits:
+    if commits_to_skip:
         # Filter down to just the ones we haven't seen
         new_commits = [
-            commit for commit in commits if commit.hexsha not in skip_commits
+            commit for commit in commits if commit.hexsha not in commits_to_skip
         ]
         commits = new_commits
     if show_progress:
@@ -68,6 +68,9 @@ def cli():
     "ids", "--id", multiple=True, help="Columns (can be multiple) to use as an ID"
 )
 @click.option(
+    "skip_hashes", "--skip", multiple=True, help="Skip specific commit hashes"
+)
+@click.option(
     "changed_mode",
     "--changed",
     is_flag=True,
@@ -115,6 +118,7 @@ def file(
     branch,
     ids,
     ignore,
+    skip_hashes,
     changed_mode,
     csv_,
     dialect,
@@ -134,6 +138,18 @@ def file(
         raise click.ClickException(
             "--changed can only be used if you specify at least one --id"
         )
+
+    db = sqlite_utils.Database(database)
+    namespace_id = db["namespaces"].lookup({"name": namespace})
+
+    commits_to_skip = (
+        set(r[0] for r in db.execute("select hash from commits").fetchall())
+        if db["commits"].exists()
+        else set()
+    )
+
+    if skip_hashes:
+        commits_to_skip.update(skip_hashes)
 
     item_table = namespace
     version_table = "{}_version".format(namespace)
@@ -176,9 +192,6 @@ def file(
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
 
-    db = sqlite_utils.Database(database)
-    namespace_id = db["namespaces"].lookup({"name": namespace})
-
     item_id_to_version = {}
     item_id_to_last_full_hash = {}
     item_id_to_previous_version = {}
@@ -198,11 +211,7 @@ def file(
         resolved_repo,
         resolved_filepath,
         branch,
-        skip_commits=set(
-            r[0] for r in db.execute("select hash from commits").fetchall()
-        )
-        if db["commits"].exists()
-        else set(),
+        commits_to_skip=commits_to_skip,
         show_progress=not silent,
     ):
         commit_id = db["commits"].lookup(
