@@ -181,7 +181,18 @@ The `item_version` table will contain a row for each captured differing version 
 
 If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
 
-Note that `_id`, `_item`, `_item_id`, `_version`, `_commit` and `rowid` are considered column names for the purposes of this tool. If your data contains any of these they will be renamed to `_id_`, `_item_`, `_version_`, `_commit_` or `_rowid_` to avoid clashing with the reserved columns.
+#### Reserved column names
+
+<!-- [[[cog
+from git_history.utils import RESERVED
+cog.out("Note that ")
+cog.out(", ".join("`{}`".format(r) for r in RESERVED))
+cog.out(" are considered column names for the purposes of this tool.")
+]]] -->
+Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `rowid` are considered column names for the purposes of this tool.
+<!-- [[[end]]] -->
+
+If your data contains any of these they will be renamed to add a trailing underscore, for example `_id_`, `_item_`, `_version_`, to avoid clashing with the reserved columns.
 
 If you have a column with a name such as `_commit_` it will be renamed too, adding an additional trailing underscore, so `_commit_` becomes `_commit__` and `_commit__` becomes `_commit___`.
 
