@@ -8,6 +8,8 @@ RESERVED = (
     "_version",
     "_commit",
     "_item_id",
+    "_commit_at",
+    "_commit_hash",
     "rowid",
 )
 reserved_with_suffix_re = re.compile("^({})_*$".format("|".join(RESERVED)))

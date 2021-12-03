@@ -158,6 +158,7 @@ def file(
 
     item_table = namespace
     version_table = "{}_version".format(namespace)
+    version_detail_view = "{}_version_detail".format(namespace)
     changed_table = "{}_changed".format(namespace)
 
     if csv_:
@@ -435,6 +436,25 @@ def file(
                     alter=True,
                     foreign_keys=(("_commit", "commits", "id"),),
                 )
+    # Create any necessary views
+    if db[version_table].exists():
+        sql = textwrap.dedent(
+            """
+            select
+                commits.commit_at as _commit_at,
+                {version_table}.*,
+                commits.hash as _commit_hash
+            from
+                {version_table}
+                join commits on commits.id = {version_table}._commit""".format(
+                version_table=version_table
+            )
+        ).strip()
+        db.create_view(
+            version_detail_view,
+            sql,
+            ignore=True,
+        )
 
 
 def _hash(record):

@@ -170,6 +170,13 @@ CREATE TABLE [item_changed] (
    [column] INTEGER REFERENCES [columns]([id]),
    PRIMARY KEY ([item_version], [column])
 );
+CREATE VIEW item_version_detail AS select
+    commits.commit_at as _commit_at,
+    item_version.*,
+    commits.hash as _commit_hash
+from
+    item_version
+    join commits on commits.id = item_version._commit;
 ```
 <!-- [[[end]]] -->
 
@@ -197,6 +204,10 @@ If a value was previously set but has been changed back to `null` it will still 
 
 You can use the `--full-versions` option to store full copies of the item at each version, rather than just storing the columns that have changed.
 
+#### item_version_detail view
+
+This SQL view joins `item_version` against `commits` to add two further columns: `_commit_at` with the date of the commit, and `_commit_hash` with the Git commit hash.
+
 #### item_changed
 
 This many-to-many table indicates exactly which columns were changed in an `item_version`.
@@ -222,7 +233,7 @@ cog.out("Note that ")
 cog.out(", ".join("`{}`".format(r) for r in RESERVED))
 cog.out(" are considered reserved column names for the purposes of this tool.")
 ]]] -->
-Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `rowid` are considered reserved column names for the purposes of this tool.
+Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `_commit_at`, `_commit_hash`, `rowid` are considered reserved column names for the purposes of this tool.
 <!-- [[[end]]] -->
 
 If your data contains any of these they will be renamed to add a trailing underscore, for example `_id_`, `_item_`, `_version_`, to avoid clashing with the reserved columns.

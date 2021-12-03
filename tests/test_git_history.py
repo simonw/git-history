@@ -1,6 +1,7 @@
 from click.testing import CliRunner
 from git_history.cli import cli
 from git_history.utils import RESERVED
+import itertools
 import json
 import pytest
 import subprocess
@@ -283,7 +284,15 @@ CREATE TABLE [{namespace}_changed] (
    [item_version] INTEGER REFERENCES [{namespace}_version]([_id]),
    [column] INTEGER REFERENCES [columns]([id]),
    PRIMARY KEY ([item_version], [column])
-);""".strip().format(
+);
+CREATE VIEW {namespace}_version_detail AS select
+    commits.commit_at as _commit_at,
+    {namespace}_version.*,
+    commits.hash as _commit_hash
+from
+    {namespace}_version
+    join commits on commits.id = {namespace}_version._commit;
+""".strip().format(
             namespace=namespace or "item"
         )
     )
@@ -430,7 +439,16 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
         "   [item_id] INTEGER,\n"
         "   [name] TEXT\n"
-        ");"
+        ");\n"
+        "CREATE VIEW {}_version_detail AS select\n".format(namespace or "item")
+        + "    commits.commit_at as _commit_at,\n"
+        "    {}_version.*,\n".format(namespace or "item")
+        + "    commits.hash as _commit_hash\n"
+        "from\n"
+        "    {}_version\n".format(namespace or "item")
+        + "    join commits on commits.id = {}_version._commit;".format(
+            namespace or "item"
+        )
     )
     assert db["commits"].count == 2
     # Should have no duplicates
@@ -509,6 +527,13 @@ def test_file_with_reserved_columns(repo, tmpdir):
            [_commit_] TEXT,
            [rowid_] INTEGER
         );
+        CREATE VIEW item_version_detail AS select
+            commits.commit_at as _commit_at,
+            item_version.*,
+            commits.hash as _commit_hash
+        from
+            item_version
+            join commits on commits.id = item_version._commit;
         """
         ).strip()
     )
@@ -607,6 +632,13 @@ def test_csv_tsv(repo, tmpdir, file):
            [TreeID] TEXT,
            [name] TEXT
         );
+        CREATE VIEW item_version_detail AS select
+            commits.commit_at as _commit_at,
+            item_version.*,
+            commits.hash as _commit_hash
+        from
+            item_version
+            join commits on commits.id = item_version._commit;
         """
         ).strip()
     )
@@ -765,7 +797,7 @@ def test_reserved_columns_are_reserved(tmpdir, repo):
     # Find all columns with _ prefixes and no suffix
     db = sqlite_utils.Database(db_path)
     with_prefix = {"rowid"}
-    for table in db.tables:
+    for table in itertools.chain(db.tables, db.views):
         for column in table.columns_dict:
             if column.startswith("_") and not column.endswith("_"):
                 with_prefix.add(column)
