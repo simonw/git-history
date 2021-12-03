@@ -1,5 +1,6 @@
 from click.testing import CliRunner
 from git_history.cli import cli
+from git_history.utils import RESERVED
 import json
 import pytest
 import subprocess
@@ -744,3 +745,28 @@ def test_skip_options(repo, tmpdir, options, expected_texts):
     db = sqlite_utils.Database(db_path)
     actual_text = [r["text"] for r in db["item_version"].rows]
     assert actual_text == expected_texts
+
+
+def test_reserved_columns_are_reserved(tmpdir, repo):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo / "items.json"),
+            "--repo",
+            str(repo),
+            "--id",
+            "item_id",
+        ],
+    )
+    # Find all columns with _ prefixes and no suffix
+    db = sqlite_utils.Database(db_path)
+    with_prefix = {"rowid"}
+    for table in db.tables:
+        for column in table.columns_dict:
+            if column.startswith("_") and not column.endswith("_"):
+                with_prefix.add(column)
+    assert with_prefix == set(RESERVED)
