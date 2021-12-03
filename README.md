@@ -42,10 +42,11 @@ Change directory into the GitHub repository in question and run the following:
 
     git-history file incidents.db incidents.json
 
-This will create a new SQLite database in the `incidents.db` file with two tables:
+This will create a new SQLite database in the `incidents.db` file with three tables:
 
-- `commit` containing a row for every commit, with a `hash` column and the `commit_at` date.
+- `commits` containing a row for every commit, with a `hash` column, the `commit_at` date and a foreign key to a `namespace`.
 - `item` containing a row for every item in every version of the `filename.json` file - with an extra `_commit` column that is a foreign key back to the `commit` table.
+- `namespaces` containing a single row. This allows you to build multiple tables for different files, using the `--namespace` option described below.
 
 The database schema for this example will look like this:
 
@@ -93,17 +94,23 @@ CREATE TABLE [item] (
 
 If you have 10 historic versions of the `incidents.json` file and each one contains 30 incidents, you will end up with 10 * 30 = 300 rows in your `item` table.
 
-### De-duplicating items using IDs
+### Track the history of individual items using IDs
 
 If your objects have a unique identifier - or multiple columns that together form a unique identifier - you can use the `--id` option to de-duplicate and track changes to each of those items over time.
+
+This provides a much more interesting way to apply this tool.
 
 If there is a unique identifier column called `IncidentID` you could run the following:
 
     git-history file incidents.db incidents.json --id IncidentID
 
-This will create three tables - `commit`, `item` and `item_version`.
+The database schema used here is very different from the one used without the `--id` option.
 
-This time the schema will look like this:
+If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
+
+This command will create six tables - `commits`, `item`, `item_version`, `columns`, `item_changed` and `namespaces`.
+
+Here's the full schema:
 
 <!-- [[[cog
 db_path2 = str(tmpdir / "data2.db")
@@ -166,11 +173,15 @@ CREATE TABLE [item_changed] (
 ```
 <!-- [[[end]]] -->
 
+#### item table
+
 The `item` table will contain the most recent version of each row, de-duplicated by ID, plus the following additional columns:
 
 - `_id` - a numeric integer primary key, used as a foreign key from the `item_version` table.
 - `_item_id` - a hash of the values of the columns specified using the `--id` option to the command. This is used for de-duplication when processing new versions.
-- `_commit` - a foreign key to the `commit` table.
+- `_commit` - a foreign key to the `commit` table, representing the most recent commit to modify this item.
+
+#### item_version table
 
 The `item_version` table will contain a row for each captured differing version of that item, plus the following columns:
 
@@ -178,8 +189,30 @@ The `item_version` table will contain a row for each captured differing version 
 - `_item` - a foreign key to the `item` table.
 - `_version` - the numeric version number, starting at 1 and incrementing for each captured version.
 - `_commit` - a foreign key to the `commit` table.
+- `_item_full_hash` - a hash of this version of the item. This is used internally by the tool to identify items that have changed between commits.
 
-If you have already imported history, the command will skip any commits that it has seen already and just process new ones. This means that even though an initial import could be slow subsequent imports should run a lot faster.
+The other columns in this table represent columns in the original data that have changed since the previous version. If the value has not changed, it will be represented by a `null`.
+
+If a value was previously set but has been changed back to `null` it will still be represented as `null` in the `item_version` row. You can identify these using the `item_changed` many-to-many table described below.
+
+You can use the `--full-versions` option to store full copies of the item at each version, rather than just storing the columns that have changed.
+
+#### item_changed
+
+This many-to-many table indicates exactly which columns were changed in an `item_version`.
+
+- `item_version` is a foreign key to a row in the `item_version` table.
+- `column` is a foreign key to a row in the `columns` table.
+
+This table with have the largest number of rows, which is why it stores just two integers in order to save space.
+
+#### columns
+
+The `columns` table stores column names. It is referenced by `item_changed`.
+
+- `id` - an integer ID.
+- `name` - the name of the column.
+- `namespace` - a foreign key to `namespaces`, for if multiple file histories are sharing the same database.
 
 #### Reserved column names
 
@@ -187,7 +220,7 @@ If you have already imported history, the command will skip any commits that it 
 from git_history.utils import RESERVED
 cog.out("Note that ")
 cog.out(", ".join("`{}`".format(r) for r in RESERVED))
-cog.out(" are considered column names for the purposes of this tool.")
+cog.out(" are considered reserved column names for the purposes of this tool.")
 ]]] -->
 Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `rowid` are considered column names for the purposes of this tool.
 <!-- [[[end]]] -->
