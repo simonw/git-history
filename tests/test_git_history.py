@@ -6,6 +6,15 @@ import subprocess
 import sqlite_utils
 import textwrap
 
+git_commit = [
+    "git",
+    "-c",
+    "user.name='Tests'",
+    "-c",
+    "user.email='actions@users.noreply.github.com'",
+    "commit",
+]
+
 
 def make_repo(tmpdir):
     repo_dir = tmpdir / "repo"
@@ -84,14 +93,6 @@ def make_repo(tmpdir):
         "utf-8",
     )
     (repo_dir / "increment.txt").write_text("1", "utf-8")
-    git_commit = [
-        "git",
-        "-c",
-        "user.name='Tests'",
-        "-c",
-        "user.email='actions@users.noreply.github.com'",
-        "commit",
-    ]
     subprocess.call(["git", "init"], cwd=str(repo_dir))
     subprocess.call(
         [
@@ -308,6 +309,70 @@ CREATE TABLE [{namespace}_changed] (
         {"item_version": 3, "column": 2},
         {"item_version": 4, "column": 1},
         {"item_version": 4, "column": 2},
+    ]
+
+
+def test_file_with_id_resume(repo, tmpdir):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo / "items.json"),
+            "--repo",
+            str(repo),
+            "--id",
+            "item_id",
+        ],
+    )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    item_version = [
+        r for r in db.query("select item_id, _version, name from item_version")
+    ]
+    assert item_version == [
+        {"item_id": 1, "_version": 1, "name": "Gin"},
+        {"item_id": 2, "_version": 1, "name": "Tonic"},
+        {"item_id": None, "_version": 2, "name": "Tonic 2"},
+        {"item_id": 3, "_version": 1, "name": "Rum"},
+    ]
+    # Now we edit, commit and try again
+    (repo / "items.json").write_text(
+        json.dumps(
+            [
+                {"item_id": 1, "name": "Gin"},
+                {"item_id": 2, "name": "Tonic 2"},
+                # This line has changed from "Rum" to "Rum Pony":
+                {"item_id": 3, "name": "Rum Pony"},
+            ]
+        ),
+        "utf-8",
+    )
+    subprocess.call(git_commit + ["-a", "-m", "another"], cwd=str(repo))
+    result2 = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo / "items.json"),
+            "--repo",
+            str(repo),
+            "--id",
+            "item_id",
+        ],
+    )
+    assert result2.exit_code == 0
+    item_version2 = [
+        r for r in db.query("select _item, item_id, _version, name from item_version")
+    ]
+    assert item_version2 == [
+        {"_item": 1, "item_id": 1, "_version": 1, "name": "Gin"},
+        {"_item": 2, "item_id": 2, "_version": 1, "name": "Tonic"},
+        {"_item": 2, "item_id": None, "_version": 2, "name": "Tonic 2"},
+        {"_item": 3, "item_id": 3, "_version": 1, "name": "Rum"},
+        {"_item": 3, "item_id": None, "_version": 2, "name": "Rum Pony"},
     ]
 
 

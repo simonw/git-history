@@ -199,7 +199,22 @@ def file(
 
     item_id_to_version = {}
     item_id_to_last_full_hash = {}
-    item_id_to_previous_version = {}
+
+    if db[version_table].exists():
+        sql = """
+        select
+            item._item_id as item_id,
+            max(item_version._version) as max_version,
+            item_version._item_full_hash as item_full_hash
+        from
+            item_version
+            join item on item_version._item = item._id
+        group by
+            _item_id
+        """
+        for row in db.query(sql):
+            item_id_to_version[row["item_id"]] = row["max_version"]
+            item_id_to_last_full_hash[row["item_id"]] = row["item_full_hash"]
 
     column_name_to_id = {}
 
@@ -320,7 +335,7 @@ def file(
 
                     # Add or fetch item
                     item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
-                    item_id = db[item_table].lookup(
+                    item_pk = db[item_table].lookup(
                         {"_item_id": item_id},
                         item_to_insert,
                         column_order=("_id", "_item_id"),
@@ -330,32 +345,42 @@ def file(
                     if full_versions:
                         # Record full copies in item_version
                         item_version = dict(
-                            item, _item=item_id, _version=version, _commit=commit_id
+                            item, _item=item_pk, _version=version, _commit=commit_id
                         )
                     else:
                         # Only record the columns that have changed
-                        previous_item = item_id_to_previous_version.get(item_id)
-
-                        if previous_item is None:
-                            # First version of this item
-                            changed_columns = item
+                        if db[version_table].exists():
+                            try:
+                                previous_item = list(
+                                    db.query(
+                                        """
+                                    select * from {version_table} where _item = ?
+                                    order by _version desc limit 1
+                                    """.format(
+                                            version_table=version_table,
+                                            item_table=item_table,
+                                        ),
+                                        [item_pk],
+                                    )
+                                )[0]
+                                changed_columns = {
+                                    key: value
+                                    for key, value in item.items()
+                                    if (key not in previous_item)
+                                    or previous_item[key] != value
+                                }
+                            except IndexError:
+                                # First version of this item
+                                changed_columns = item
                         else:
-                            changed_columns = {
-                                key: value
-                                for key, value in item.items()
-                                if (key not in previous_item)
-                                or previous_item[key] != value
-                            }
-                        item_id_to_previous_version[item_id] = item
+                            changed_columns = item
 
-                        # Only record the columns that changed
                         item_version = dict(
                             changed_columns,
-                            _item=item_id,
+                            _item=item_pk,
                             _version=version,
                             _commit=commit_id,
                             _item_full_hash=item_full_hash,
-                            # _item_full = json.dumps(item, default=repr),
                         )
 
                     item_version_id = (
