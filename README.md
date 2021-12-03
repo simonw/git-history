@@ -183,7 +183,7 @@ If you have already imported history, the command will skip any commits that it 
 
 Note that `_id`, `_item`, `_item_id`, `_version`, `_commit` and `rowid` are considered column names for the purposes of this tool. If your data contains any of these they will be renamed to `_id_`, `_item_`, `_version_`, `_commit_` or `_rowid_` to avoid clashing with the reserved columns.
 
-If you have a column with a name such as `_commit_` it will be renamed too, adding an additional trailing underscore, so `_commit_` becomes `_commit__` and `_commit__` becomes `_commit__`.
+If you have a column with a name such as `_commit_` it will be renamed too, adding an additional trailing underscore, so `_commit_` becomes `_commit__` and `_commit__` becomes `_commit___`.
 
 ### Additional options
 
