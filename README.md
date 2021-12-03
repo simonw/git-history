@@ -222,7 +222,7 @@ cog.out("Note that ")
 cog.out(", ".join("`{}`".format(r) for r in RESERVED))
 cog.out(" are considered reserved column names for the purposes of this tool.")
 ]]] -->
-Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `rowid` are considered column names for the purposes of this tool.
+Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `rowid` are considered reserved column names for the purposes of this tool.
 <!-- [[[end]]] -->
 
 If your data contains any of these they will be renamed to add a trailing underscore, for example `_id_`, `_item_`, `_version_`, to avoid clashing with the reserved columns.
