@@ -246,189 +246,195 @@ def file(
             else:
                 continue
 
-        commit_id = db["commits"].lookup(
-            {"namespace": namespace_id, "hash": git_hash},
-            {"commit_at": git_commit_at.isoformat()},
-            foreign_keys=(("namespace", "namespaces", "id"),),
-        )
-        if not content.strip():
-            # Skip empty JSON files
-            continue
-
-        # list() to resolve generators for repeated access later
-        items = list(fn(content))
-
-        # Remove any --ignore columns
-        if ignore:
-            new_items = []
-            for item in items:
-                new_item = dict(
-                    (key, value) for key, value in item.items() if key not in ignore
-                )
-                new_items.append(new_item)
-            items = new_items
-
-        # If --id is specified, do things a bit differently
-        if ids:
-            # Any ids that are reserved columns must be renamed
-            fixed_ids = set(
-                fix_reserved_columns(
-                    {id: 1 for id in ids},
-                ).keys()
+        with db.conn:  # One transaction per git commit processed
+            commit_id = db["commits"].lookup(
+                {"namespace": namespace_id, "hash": git_hash},
+                {"commit_at": git_commit_at.isoformat()},
+                foreign_keys=(("namespace", "namespaces", "id"),),
             )
-            # Check all items have those columns
-            _ids_set = set(ids)
-            bad_items = [
-                bad_item for bad_item in items if not _ids_set.issubset(bad_item.keys())
-            ]
-            if bad_items:
-                raise click.ClickException(
-                    "Commit: {} - every item must have the --id keys. These items did not:\n{}".format(
-                        git_hash, json.dumps(bad_items[:5], indent=4, default=str)
+            if not content.strip():
+                # Skip empty JSON files
+                continue
+
+            # list() to resolve generators for repeated access later
+            items = list(fn(content))
+
+            # Remove any --ignore columns
+            if ignore:
+                new_items = []
+                for item in items:
+                    new_item = dict(
+                        (key, value) for key, value in item.items() if key not in ignore
                     )
+                    new_items.append(new_item)
+                items = new_items
+
+            # If --id is specified, do things a bit differently
+            if ids:
+                # Any ids that are reserved columns must be renamed
+                fixed_ids = set(
+                    fix_reserved_columns(
+                        {id: 1 for id in ids},
+                    ).keys()
                 )
-            item_ids_in_this_commit = set()
-            # Which of these are new versions of things we have seen before?
-            for item in items:
-                item = fix_reserved_columns(item)
-                item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
-                if item_id in item_ids_in_this_commit:
-                    # Ensure there are not TWO items in this commit with the same ID
-                    if not ignore_duplicate_ids:
-                        raise click.ClickException(
-                            "Commit: {} - found multiple items with the same ID:\n{}".format(
-                                git_hash,
-                                json.dumps(
-                                    [
-                                        item
-                                        for item in items
-                                        if _hash(
-                                            dict((id, item.get(id)) for id in fixed_ids)
+                # Check all items have those columns
+                _ids_set = set(ids)
+                bad_items = [
+                    bad_item
+                    for bad_item in items
+                    if not _ids_set.issubset(bad_item.keys())
+                ]
+                if bad_items:
+                    raise click.ClickException(
+                        "Commit: {} - every item must have the --id keys. These items did not:\n{}".format(
+                            git_hash, json.dumps(bad_items[:5], indent=4, default=str)
+                        )
+                    )
+                item_ids_in_this_commit = set()
+                # Which of these are new versions of things we have seen before?
+                for item in items:
+                    item = fix_reserved_columns(item)
+                    item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
+                    if item_id in item_ids_in_this_commit:
+                        # Ensure there are not TWO items in this commit with the same ID
+                        if not ignore_duplicate_ids:
+                            raise click.ClickException(
+                                "Commit: {} - found multiple items with the same ID:\n{}".format(
+                                    git_hash,
+                                    json.dumps(
+                                        [
+                                            item
+                                            for item in items
+                                            if _hash(
+                                                dict(
+                                                    (id, item.get(id))
+                                                    for id in fixed_ids
+                                                )
+                                            )
+                                            == item_id
+                                        ][:5],
+                                        indent=4,
+                                        default=str,
+                                    ),
+                                )
+                            )
+                        else:
+                            # Skip this one
+                            continue
+
+                    item_ids_in_this_commit.add(item_id)
+
+                    # Has it changed since last time we saw it?
+                    item_full_hash = _hash(item)
+                    item_is_new = item_id not in item_id_to_last_full_hash
+                    item_full_hash_has_changed = (
+                        item_id_to_last_full_hash.get(item_id) != item_full_hash
+                    )
+
+                    changed_columns = {}
+
+                    if item_is_new or item_full_hash_has_changed:
+                        # It's either new or the content has changed - so update item and insert an item_version
+                        item_id_to_last_full_hash[item_id] = item_full_hash
+                        version = item_id_to_version.get(item_id, 0) + 1
+                        item_id_to_version[item_id] = version
+
+                        # Add or fetch item
+                        item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
+                        item_pk = db[item_table].lookup(
+                            {"_item_id": item_id},
+                            item_to_insert,
+                            column_order=("_id", "_item_id"),
+                            pk="_id",
+                        )
+
+                        if full_versions:
+                            # Record full copies in item_version
+                            item_version = dict(
+                                item, _item=item_pk, _version=version, _commit=commit_id
+                            )
+                        else:
+                            # Only record the columns that have changed
+                            if db[version_table].exists():
+                                try:
+                                    previous_item = list(
+                                        db.query(
+                                            """
+                                        select * from {version_table} where _item = ?
+                                        order by _version desc limit 1
+                                        """.format(
+                                                version_table=version_table,
+                                                item_table=item_table,
+                                            ),
+                                            [item_pk],
                                         )
-                                        == item_id
-                                    ][:5],
-                                    indent=4,
-                                    default=str,
+                                    )[0]
+                                    changed_columns = {
+                                        key: value
+                                        for key, value in item.items()
+                                        if (key not in previous_item)
+                                        or previous_item[key] != value
+                                    }
+                                except IndexError:
+                                    # First version of this item
+                                    changed_columns = item
+                            else:
+                                changed_columns = item
+
+                            item_version = dict(
+                                changed_columns,
+                                _item=item_pk,
+                                _version=version,
+                                _commit=commit_id,
+                                _item_full_hash=item_full_hash,
+                            )
+
+                        item_version_id = (
+                            db[version_table]
+                            .insert(
+                                item_version,
+                                pk="_id",
+                                alter=True,
+                                replace=True,
+                                column_order=("_item", "_version", "_commit"),
+                                foreign_keys=(
+                                    ("_item", item_table, "_id"),
+                                    ("_commit", "commits", "id"),
                                 ),
                             )
+                            .last_pk
                         )
-                    else:
-                        # Skip this one
-                        continue
 
-                item_ids_in_this_commit.add(item_id)
+                        if changed_columns:
+                            # Record which columns changed in the changed m2m table
+                            db[changed_table].insert_all(
+                                (
+                                    {
+                                        "item_version": item_version_id,
+                                        "column": column_id(column),
+                                    }
+                                    for column in changed_columns
+                                ),
+                                pk=("item_version", "column"),
+                                foreign_keys=(
+                                    ("item_version", version_table, "_id"),
+                                    ("column", "columns", "id"),
+                                    ("namespace", "namespaces", "id"),
+                                ),
+                            )
 
-                # Has it changed since last time we saw it?
-                item_full_hash = _hash(item)
-                item_is_new = item_id not in item_id_to_last_full_hash
-                item_full_hash_has_changed = (
-                    item_id_to_last_full_hash.get(item_id) != item_full_hash
+            else:
+                # no --id - so just correct for reserved columns and add item["_commit"]
+                for item in items:
+                    item = fix_reserved_columns(item)
+                    item["_commit"] = commit_id
+                # In this case item table needs a foreign key on 'commit'
+                db[item_table].insert_all(
+                    items,
+                    column_order=("_id",),
+                    alter=True,
+                    foreign_keys=(("_commit", "commits", "id"),),
                 )
-
-                changed_columns = {}
-
-                if item_is_new or item_full_hash_has_changed:
-                    # It's either new or the content has changed - so update item and insert an item_version
-                    item_id_to_last_full_hash[item_id] = item_full_hash
-                    version = item_id_to_version.get(item_id, 0) + 1
-                    item_id_to_version[item_id] = version
-
-                    # Add or fetch item
-                    item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
-                    item_pk = db[item_table].lookup(
-                        {"_item_id": item_id},
-                        item_to_insert,
-                        column_order=("_id", "_item_id"),
-                        pk="_id",
-                    )
-
-                    if full_versions:
-                        # Record full copies in item_version
-                        item_version = dict(
-                            item, _item=item_pk, _version=version, _commit=commit_id
-                        )
-                    else:
-                        # Only record the columns that have changed
-                        if db[version_table].exists():
-                            try:
-                                previous_item = list(
-                                    db.query(
-                                        """
-                                    select * from {version_table} where _item = ?
-                                    order by _version desc limit 1
-                                    """.format(
-                                            version_table=version_table,
-                                            item_table=item_table,
-                                        ),
-                                        [item_pk],
-                                    )
-                                )[0]
-                                changed_columns = {
-                                    key: value
-                                    for key, value in item.items()
-                                    if (key not in previous_item)
-                                    or previous_item[key] != value
-                                }
-                            except IndexError:
-                                # First version of this item
-                                changed_columns = item
-                        else:
-                            changed_columns = item
-
-                        item_version = dict(
-                            changed_columns,
-                            _item=item_pk,
-                            _version=version,
-                            _commit=commit_id,
-                            _item_full_hash=item_full_hash,
-                        )
-
-                    item_version_id = (
-                        db[version_table]
-                        .insert(
-                            item_version,
-                            pk="_id",
-                            alter=True,
-                            replace=True,
-                            column_order=("_item", "_version", "_commit"),
-                            foreign_keys=(
-                                ("_item", item_table, "_id"),
-                                ("_commit", "commits", "id"),
-                            ),
-                        )
-                        .last_pk
-                    )
-
-                    if changed_columns:
-                        # Record which columns changed in the changed m2m table
-                        db[changed_table].insert_all(
-                            (
-                                {
-                                    "item_version": item_version_id,
-                                    "column": column_id(column),
-                                }
-                                for column in changed_columns
-                            ),
-                            pk=("item_version", "column"),
-                            foreign_keys=(
-                                ("item_version", version_table, "_id"),
-                                ("column", "columns", "id"),
-                                ("namespace", "namespaces", "id"),
-                            ),
-                        )
-
-        else:
-            # no --id - so just correct for reserved columns and add item["_commit"]
-            for item in items:
-                item = fix_reserved_columns(item)
-                item["_commit"] = commit_id
-            # In this case item table needs a foreign key on 'commit'
-            db[item_table].insert_all(
-                items,
-                column_order=("_id",),
-                alter=True,
-                foreign_keys=(("_commit", "commits", "id"),),
-            )
 
 
 def _hash(record):
