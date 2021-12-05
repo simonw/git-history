@@ -1,5 +1,6 @@
 import json
 import re
+from sqlite_utils.db import jsonify_if_needed
 
 RESERVED = (
     "_id",
@@ -31,12 +32,6 @@ def _fix_key(key):
         return key
 
 
-def _comparable(obj):
-    if isinstance(obj, (tuple, list, dict)):
-        return json.dumps(obj, default=repr)
-    return obj
-
-
 def is_different(one, two):
     "Compares values, including lists and dictionaries"
-    return _comparable(one) != _comparable(two)
+    return jsonify_if_needed(one) != jsonify_if_needed(two)
