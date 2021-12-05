@@ -256,6 +256,7 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 - `--import TEXT` - additional Python modules to import for `--convert`.
 - `--ignore-duplicate-ids` - if a single version of a file has the same ID in it more than once, the tool will exit with an error. Use this option to ignore this and instead pick just the first of the two duplicates.
 - `--namespace TEXT` - use this if you wish to include the history of multiple different files in the same database. The default is `item` but you can set it to something else, which will produce tables with names like `yournamespace` and `yournamespace_version`.
+- `--wal` - Enable WAL mode on the created database file. Use this if you plan to run queries against the database while `git-history` is creating it.
 - `--silent` - don't show the progress bar.
 
 ### CSV and TSV data

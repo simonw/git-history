@@ -108,6 +108,11 @@ def cli():
     help="Keep going if same ID occurs more than once in a single version of a file",
 )
 @click.option(
+    "--wal",
+    is_flag=True,
+    help="Enable WAL mode on the created database file",
+)
+@click.option(
     "--silent",
     is_flag=True,
     help="Don't show progress bar",
@@ -130,6 +135,7 @@ def file(
     convert,
     imports,
     ignore_duplicate_ids,
+    wal,
     silent,
 ):
     "Analyze the history of a specific file and write it to SQLite"
@@ -145,6 +151,8 @@ def file(
         )
 
     db = sqlite_utils.Database(database)
+    if wal:
+        db.enable_wal()
     namespace_id = db["namespaces"].lookup({"name": namespace})
 
     commits_to_skip = (

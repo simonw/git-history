@@ -802,3 +802,27 @@ def test_reserved_columns_are_reserved(tmpdir, repo):
             if column.startswith("_") and not column.endswith("_"):
                 with_prefix.add(column)
     assert with_prefix == set(RESERVED)
+
+
+@pytest.mark.parametrize("use_wal", (True, False))
+def test_wal(repo, tmpdir, use_wal):
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    options = [
+        "file",
+        db_path,
+        str(repo / "items.json"),
+        "--repo",
+        str(repo),
+    ]
+    if use_wal:
+        options.append("--wal")
+    result = runner.invoke(
+        cli,
+        options,
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    expected_journal_mode = "wal" if use_wal else "delete"
+    assert db.journal_mode == expected_journal_mode
