@@ -5,7 +5,7 @@ import json
 import sqlite_utils
 import textwrap
 from pathlib import Path
-from .utils import fix_reserved_columns
+from .utils import fix_reserved_columns, is_different
 
 
 def iterate_file_versions(
@@ -382,7 +382,7 @@ def file(
                                         key: value
                                         for key, value in item.items()
                                         if (key not in previous_item)
-                                        or previous_item[key] != value
+                                        or is_different(previous_item[key], value)
                                     }
                                 except IndexError:
                                     # First version of this item

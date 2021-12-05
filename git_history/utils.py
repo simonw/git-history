@@ -1,3 +1,4 @@
+import json
 import re
 
 RESERVED = (
@@ -28,3 +29,14 @@ def _fix_key(key):
         return key + "_"
     else:
         return key
+
+
+def _comparable(obj):
+    if isinstance(obj, (tuple, list, dict)):
+        return json.dumps(obj, default=repr)
+    return obj
+
+
+def is_different(one, two):
+    "Compares values, including lists and dictionaries"
+    return _comparable(one) != _comparable(two)
