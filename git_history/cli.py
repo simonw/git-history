@@ -353,6 +353,7 @@ def file(
                                         updated_columns.add(column)
                             else:
                                 updated_values = item_flattened
+                                updated_columns.update(item_flattened.keys())
 
                             item_version = dict(
                                 updated_values,
@@ -396,8 +397,8 @@ def file(
                                 ),
                             )
                         else:
-                            # ERROR: full has hchanged but no visible changes?
-                            if not item_is_new:
+                            # ERROR: full has changed but no visible changes?
+                            if not item_is_new and not full_versions:
                                 import pdb
 
                                 pdb.set_trace()
@@ -525,7 +526,9 @@ def get_versions_and_hashes(db, namespace):
             join {namespace} on {namespace}_version._item = item._id
         group by
             _item_id
-        """
+        """.format(
+            namespace=namespace
+        )
         for row in db.query(sql):
             item_id_to_version[row["item_id"]] = row["max_version"]
             item_id_to_last_full_hash[row["item_id"]] = row["item_full_hash"]
