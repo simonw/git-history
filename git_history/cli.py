@@ -7,9 +7,6 @@ import textwrap
 from pathlib import Path
 from .utils import RESERVED_SET, fix_reserved_columns, jsonify_if_needed
 
-import dictdiffer
-from pprint import pformat
-
 
 def iterate_file_versions(
     repo_path, filepath, ref="main", commits_to_skip=None, show_progress=False
