@@ -162,6 +162,7 @@ def file(
     db = sqlite_utils.Database(database)
     if wal:
         db.enable_wal()
+
     namespace_id = db["namespaces"].lookup({"name": namespace})
 
     commits_to_skip = (
@@ -179,38 +180,13 @@ def file(
     changed_table = "{}_changed".format(namespace)
 
     if csv_:
-        convert = textwrap.dedent(
-            """
-            decoded = content.decode("utf-8")
-            dialect = {}
-            reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
-            return reader
-        """.format(
-                '"{}"'.format(dialect)
-                if dialect
-                else "csv.Sniffer().sniff(decoded[:1024])"
-            )
-        )
+        convert = build_csv_convert_string(dialect)
         imports = ["io", "csv"]
 
     if not convert:
         convert = "json.loads(content)"
 
-    # Clean up the provided code
-    # If single line and no 'return', add the return
-    if "\n" not in convert and not convert.strip().startswith("return "):
-        convert = "return {}".format(convert)
-    # Compile the code into a function body called fn(content)
-    new_code = ["def fn(content):"]
-    for line in convert.split("\n"):
-        new_code.append("    {}".format(line))
-    code_o = compile("\n".join(new_code), "<string>", "exec")
-    locals = {}
-    globals = {"json": json}
-    for import_ in imports:
-        globals[import_] = __import__(import_)
-    exec(code_o, globals, locals)
-    fn = locals["fn"]
+    convert_function = compile_convert(convert, imports)
 
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
@@ -219,6 +195,7 @@ def file(
     item_id_to_last_full_hash = {}
 
     if db[version_table].exists():
+        # TODO: Make this work with namespaces other than 'item'
         sql = """
         select
             item._item_id as item_id,
@@ -271,21 +248,14 @@ def file(
                 foreign_keys=(("namespace", "namespaces", "id"),),
             )
             if not content.strip():
-                # Skip empty JSON files
+                # Skip empty files
                 continue
 
             # list() to resolve generators for repeated access later
-            items = list(fn(content))
+            items = list(convert_function(content))
 
             # Remove any --ignore columns
-            if ignore:
-                new_items = []
-                for item in items:
-                    new_item = dict(
-                        (key, value) for key, value in item.items() if key not in ignore
-                    )
-                    new_items.append(new_item)
-                items = new_items
+            items = remove_ignore_columns(items, ignore)
 
             # If --id is specified, do things a bit differently
             if ids:
@@ -482,24 +452,9 @@ def file(
                 )
 
     # Create any necessary views
-    if db[version_table].exists():
-        sql = textwrap.dedent(
-            """
-            select
-                commits.commit_at as _commit_at,
-                {version_table}.*,
-                commits.hash as _commit_hash
-            from
-                {version_table}
-                join commits on commits.id = {version_table}._commit""".format(
-                version_table=version_table
-            )
-        ).strip()
-        db.create_view(
-            version_detail_view,
-            sql,
-            ignore=True,
-        )
+    create_views(
+        db, version_table=version_table, version_detail_view=version_detail_view
+    )
 
 
 def _hash(record):
@@ -529,3 +484,68 @@ def get_item(db, item_table, item_id):
         return previous_items[0]
     else:
         return None
+
+
+def build_csv_convert_string(dialect):
+    return textwrap.dedent(
+        """
+        decoded = content.decode("utf-8")
+        dialect = {}
+        reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
+        return reader
+        """.format(
+            '"{}"'.format(dialect) if dialect else "csv.Sniffer().sniff(decoded[:1024])"
+        )
+    ).strip()
+
+
+def compile_convert(convert, imports):
+    # Clean up the provided code
+    # If single line and no 'return', add the return
+    if "\n" not in convert and not convert.strip().startswith("return "):
+        convert = "return {}".format(convert)
+    # Compile the code into a function body called fn(content)
+    new_code = ["def fn(content):"]
+    for line in convert.split("\n"):
+        new_code.append("    {}".format(line))
+    code_o = compile("\n".join(new_code), "<string>", "exec")
+    locals = {}
+    globals = {"json": json}
+    for import_ in imports:
+        globals[import_] = __import__(import_)
+    exec(code_o, globals, locals)
+    return locals["fn"]
+
+
+def remove_ignore_columns(items, ignore):
+    if ignore:
+        new_items = []
+        for item in items:
+            new_item = dict(
+                (key, value) for key, value in item.items() if key not in ignore
+            )
+            new_items.append(new_item)
+        return new_items
+    else:
+        return items
+
+
+def create_views(db, version_table, version_detail_view):
+    if db[version_table].exists():
+        sql = textwrap.dedent(
+            """
+            select
+                commits.commit_at as _commit_at,
+                {version_table}.*,
+                commits.hash as _commit_hash
+            from
+                {version_table}
+                join commits on commits.id = {version_table}._commit""".format(
+                version_table=version_table
+            )
+        ).strip()
+        db.create_view(
+            version_detail_view,
+            sql,
+            ignore=True,
+        )
