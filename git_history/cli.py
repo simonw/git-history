@@ -498,7 +498,6 @@ def create_views(db, namespace):
             ) as _changed_columns
             from {namespace}_version
               join commits on commits.id = {namespace}_version._commit
-              join {namespace}_changed on {namespace}_version._id = {namespace}_changed.item_version
             """.format(
                 namespace=namespace
             )

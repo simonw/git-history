@@ -189,8 +189,7 @@ def expected_create_view(namespace):
             )
         ) as _changed_columns
         from {namespace}_version
-          join commits on commits.id = {namespace}_version._commit
-          join {namespace}_changed on {namespace}_version._id = {namespace}_changed.item_version;
+          join commits on commits.id = {namespace}_version._commit;
     """.format(
             namespace=namespace
         )
@@ -369,18 +368,6 @@ CREATE TABLE [{namespace}_changed] (
         },
         {
             "_version": 1,
-            "product_id": 1,
-            "name": "Gin",
-            "_changed_columns": ["name", "product_id"],
-        },
-        {
-            "_version": 1,
-            "product_id": 2,
-            "name": "Tonic",
-            "_changed_columns": ["name", "product_id"],
-        },
-        {
-            "_version": 1,
             "product_id": 2,
             "name": "Tonic",
             "_changed_columns": ["name", "product_id"],
@@ -390,12 +377,6 @@ CREATE TABLE [{namespace}_changed] (
             "product_id": None,
             "name": "Tonic 2",
             "_changed_columns": ["name"],
-        },
-        {
-            "_version": 1,
-            "product_id": 3,
-            "name": "Rum",
-            "_changed_columns": ["name", "product_id"],
         },
         {
             "_version": 1,
