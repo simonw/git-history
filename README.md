@@ -321,13 +321,21 @@ You can import additional modules using `--import`. This example shows how you c
         ' \
       --id TreeID
 
-You can import nested modules such as [ElementTree](https://docs.python.org/3/library/xml.etree.elementtree.html)  using `--import xml.etree.ElementTree`, then refer to them in your function body as `xml.etree.ElementTree`. For example:
+You can import nested modules such as [ElementTree](https://docs.python.org/3/library/xml.etree.elementtree.html)  using `--import xml.etree.ElementTree`, then refer to them in your function body as `xml.etree.ElementTree`. For example, if your tracked data was in an `items.xml` file that looked like this:
 
+```xml
+<items>
+  <item id="1" name="One" />
+  <item id="2" name="Two" />
+  <item id="3" name="Three" />
+</item>
+```
+You could load it using the following `--convert` script:
 ```
 git-history file items.xml --convert '
 tree = xml.etree.ElementTree.fromstring(content)
 return [el.attrib for el in tree.iter("item")]
-' --import xml.etree.ElementTree
+' --import xml.etree.ElementTree --id id
 ```
 
 If your Python code spans more than one line it needs to include a `return` statement.
