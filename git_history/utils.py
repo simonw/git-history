@@ -14,6 +14,7 @@ RESERVED = (
     "rowid",
 )
 reserved_with_suffix_re = re.compile("^({})_*$".format("|".join(RESERVED)))
+RESERVED_SET = set(RESERVED)
 
 
 def fix_reserved_columns(item):
