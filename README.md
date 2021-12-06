@@ -177,8 +177,7 @@ CREATE VIEW item_version_detail AS select
     )
 ) as _changed_columns
 from item_version
-  join commits on commits.id = item_version._commit
-  join item_changed on item_version._id = item_changed.item_version;
+  join commits on commits.id = item_version._commit;
 ```
 <!-- [[[end]]] -->
 
