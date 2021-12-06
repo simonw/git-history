@@ -115,7 +115,7 @@ def cli():
 @click.option(
     "--debug",
     is_flag=True,
-    help="Store extra information in SQLite for debugging",
+    help="Debug mode",
 )
 @click.option(
     "--silent",
@@ -395,7 +395,10 @@ def file(
                             )
                         else:
                             # ERROR: full has changed but no visible changes?
-                            if not item_is_new and not full_versions:
+                            if not item_is_new and not full_versions and debug:
+                                print(
+                                    "Potential bug: hashchanged but no updated_columns"
+                                )
                                 import pdb
 
                                 pdb.set_trace()
