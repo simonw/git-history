@@ -5,7 +5,10 @@ import json
 import sqlite_utils
 import textwrap
 from pathlib import Path
-from .utils import fix_reserved_columns, is_different
+from .utils import fix_reserved_columns, jsonify_if_needed
+
+import dictdiffer
+from pprint import pformat
 
 
 def iterate_file_versions(
@@ -113,6 +116,11 @@ def cli():
     help="Enable WAL mode on the created database file",
 )
 @click.option(
+    "--debug",
+    is_flag=True,
+    help="Store extra information in SQLite for debugging",
+)
+@click.option(
     "--silent",
     is_flag=True,
     help="Don't show progress bar",
@@ -136,6 +144,7 @@ def file(
     imports,
     ignore_duplicate_ids,
     wal,
+    debug,
     silent,
 ):
     "Analyze the history of a specific file and write it to SQLite"
@@ -255,7 +264,7 @@ def file(
             else:
                 continue
 
-        with db.conn:  # One transaction per git commit processed
+        if True:  # with db.conn:  # One transaction per git commit processed
             commit_id = db["commits"].lookup(
                 {"namespace": namespace_id, "hash": git_hash},
                 {"commit_at": git_commit_at.isoformat()},
@@ -299,12 +308,12 @@ def file(
                             git_hash, json.dumps(bad_items[:5], indent=4, default=str)
                         )
                     )
-                item_ids_in_this_commit = set()
+                item_ids_seen_in_this_commit = set()
                 # Which of these are new versions of things we have seen before?
                 for item in items:
                     item = fix_reserved_columns(item)
                     item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
-                    if item_id in item_ids_in_this_commit:
+                    if item_id in item_ids_seen_in_this_commit:
                         # Ensure there are not TWO items in this commit with the same ID
                         if not ignore_duplicate_ids:
                             raise click.ClickException(
@@ -331,67 +340,87 @@ def file(
                             # Skip this one
                             continue
 
-                    item_ids_in_this_commit.add(item_id)
+                    item_ids_seen_in_this_commit.add(item_id)
 
                     # Has it changed since last time we saw it?
                     item_full_hash = _hash(item)
+
+                    # JSONify any lists/dicts to assist later comparison with row from DB
+                    item_flattened = jsonify_all(item)
+
+                    if debug:
+                        db["debug"].insert(
+                            {
+                                "hash": item_full_hash,
+                                "content": json.dumps(
+                                    item, default=repr, sort_keys=True
+                                ),
+                            },
+                            pk="hash",
+                            replace=True,
+                        )
+
                     item_is_new = item_id not in item_id_to_last_full_hash
                     item_full_hash_has_changed = (
                         item_id_to_last_full_hash.get(item_id) != item_full_hash
                     )
 
-                    changed_columns = {}
+                    updated_values = {}
 
                     if item_is_new or item_full_hash_has_changed:
+                        # TODO: delete-me
+                        previous_item_hash = item_id_to_last_full_hash.get(item_id)
+
                         # It's either new or the content has changed - so update item and insert an item_version
                         item_id_to_last_full_hash[item_id] = item_full_hash
                         version = item_id_to_version.get(item_id, 0) + 1
                         item_id_to_version[item_id] = version
 
-                        # Add or fetch item
-                        item_to_insert = dict(item, _item_id=item_id, _commit=commit_id)
+                        previous_item = None
+                        if not item_is_new:
+                            previous_item = get_item(db, item_table, item_id)
+
+                        # Add or update item
                         item_pk = db[item_table].lookup(
                             {"_item_id": item_id},
-                            item_to_insert,
+                            dict(item_flattened, _commit=commit_id),
                             column_order=("_id", "_item_id"),
+                            foreign_keys=(("_commit", "commits", "id"),),
                             pk="_id",
                         )
 
                         if full_versions:
                             # Record full copies in item_version
                             item_version = dict(
-                                item, _item=item_pk, _version=version, _commit=commit_id
+                                item_flattened,
+                                _item=item_pk,
+                                _version=version,
+                                _commit=commit_id,
                             )
                         else:
                             # Only record the columns that have changed
-                            if db[version_table].exists():
-                                try:
-                                    previous_item = list(
-                                        db.query(
-                                            """
-                                        select * from {version_table} where _item = ?
-                                        order by _version desc limit 1
-                                        """.format(
-                                                version_table=version_table,
-                                                item_table=item_table,
-                                            ),
-                                            [item_pk],
+                            if previous_item is not None:
+                                print(
+                                    "\n\nFiguring out updated values:\n",
+                                    pformat(
+                                        list(
+                                            dictdiffer.diff(
+                                                item_flattened, previous_item
+                                            )
                                         )
-                                    )[0]
-                                    changed_columns = {
-                                        key: value
-                                        for key, value in item.items()
-                                        if (key not in previous_item)
-                                        or is_different(previous_item[key], value)
-                                    }
-                                except IndexError:
-                                    # First version of this item
-                                    changed_columns = item
+                                    ),
+                                )
+                                updated_values = {
+                                    key: value
+                                    for key, value in item_flattened.items()
+                                    if (key not in previous_item)
+                                    or previous_item[key] != value
+                                }
                             else:
-                                changed_columns = item
+                                updated_values = item_flattened
 
                             item_version = dict(
-                                changed_columns,
+                                updated_values,
                                 _item=item_pk,
                                 _version=version,
                                 _commit=commit_id,
@@ -414,7 +443,7 @@ def file(
                             .last_pk
                         )
 
-                        if changed_columns:
+                        if updated_values:
                             # Record which columns changed in the changed m2m table
                             db[changed_table].insert_all(
                                 (
@@ -422,7 +451,7 @@ def file(
                                         "item_version": item_version_id,
                                         "column": column_id(column),
                                     }
-                                    for column in changed_columns
+                                    for column in updated_values
                                 ),
                                 pk=("item_version", "column"),
                                 foreign_keys=(
@@ -431,11 +460,18 @@ def file(
                                     ("namespace", "namespaces", "id"),
                                 ),
                             )
+                        else:
+                            # ERROR: full has hchanged but no visible changes?
+                            if not item_is_new:
+                                import pdb
+
+                                pdb.set_trace()
+                                assert False
 
             else:
                 # no --id - so just correct for reserved columns and add item["_commit"]
                 for item in items:
-                    item = fix_reserved_columns(item)
+                    item = jsonify_all(fix_reserved_columns(item))
                     item["_commit"] = commit_id
                 # In this case item table needs a foreign key on 'commit'
                 db[item_table].insert_all(
@@ -444,6 +480,7 @@ def file(
                     alter=True,
                     foreign_keys=(("_commit", "commits", "id"),),
                 )
+
     # Create any necessary views
     if db[version_table].exists():
         sql = textwrap.dedent(
@@ -471,3 +508,24 @@ def _hash(record):
             "utf8"
         )
     ).hexdigest()
+
+
+def jsonify_all(item):
+    return {key: jsonify_if_needed(value) for key, value in item.items()}
+
+
+def get_item(db, item_table, item_id):
+    previous_items = list(
+        db.query(
+            """
+        select * from [{item_table}] where _item_id = ?
+        """.format(
+                item_table=item_table,
+            ),
+            [item_id],
+        )
+    )
+    if previous_items:
+        return previous_items[0]
+    else:
+        return None
