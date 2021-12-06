@@ -334,10 +334,14 @@ def file(
                         # Add or update item
                         item_pk = db[item_table].lookup(
                             {"_item_id": item_id},
-                            dict(item_flattened, _commit=commit_pk),
                             column_order=("_id", "_item_id"),
                             foreign_keys=(("_commit", "commits", "id"),),
                             pk="_id",
+                        )
+                        db[item_table].update(
+                            item_pk,
+                            dict(item_flattened, _item_id=item_id, _commit=commit_pk),
+                            alter=True,
                         )
 
                         if full_versions:
