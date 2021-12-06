@@ -238,54 +238,40 @@ def file(
             # Remove any --ignore columns
             items = remove_ignore_columns(items, ignore)
 
-            # If --id is specified, do things a bit differently
-            if ids:
-                # Any ids that are reserved columns must be renamed
+            if not ids:
+                # no --id - so just populate item_table and add item["_commit"]
+                for item in items:
+                    item = jsonify_all(fix_reserved_columns(item))
+                    item["_commit"] = commit_pk
+                db[item_table].insert_all(
+                    items,
+                    column_order=("_id",),
+                    alter=True,
+                    foreign_keys=(("_commit", "commits", "id"),),
+                )
+            else:
+                # --id is specified, so populate item_version with changes over time
+                # Any --id that is a reserved column needs to be renamed first
                 fixed_ids = set(
                     fix_reserved_columns(
                         {id: 1 for id in ids},
                     ).keys()
                 )
-                # Check all items have those columns
-                _ids_set = set(ids)
-                bad_items = [
-                    bad_item
-                    for bad_item in items
-                    if not _ids_set.issubset(bad_item.keys())
-                ]
-                if bad_items:
-                    raise click.ClickException(
-                        "Commit: {} - every item must have the --id keys. These items did not:\n{}".format(
-                            git_hash, json.dumps(bad_items[:5], indent=4, default=str)
-                        )
-                    )
+                # Validate all items in the commit have ID columns - raises ClickException if not
+                validate_items_have_id_columns(items, ids, git_hash)
+
+                # Use this to detect IDs that are duplicated in the same commit
                 item_ids_seen_in_this_commit = set()
+
                 # Which of these are new versions of things we have seen before?
                 for item in items:
                     item = fix_reserved_columns(item)
                     item_id = _hash(dict((id, item.get(id)) for id in fixed_ids))
                     if item_id in item_ids_seen_in_this_commit:
-                        # Ensure there are not TWO items in this commit with the same ID
+                        # Ensure there are not multiple items in this commit with the same ID
                         if not ignore_duplicate_ids:
-                            raise click.ClickException(
-                                "Commit: {} - found multiple items with the same ID:\n{}".format(
-                                    git_hash,
-                                    json.dumps(
-                                        [
-                                            item
-                                            for item in items
-                                            if _hash(
-                                                dict(
-                                                    (id, item.get(id))
-                                                    for id in fixed_ids
-                                                )
-                                            )
-                                            == item_id
-                                        ][:5],
-                                        indent=4,
-                                        default=str,
-                                    ),
-                                )
+                            raise DuplicateIdsException(
+                                git_hash, items, fixed_ids, item_id
                             )
                         else:
                             # Skip this one
@@ -355,16 +341,6 @@ def file(
                         else:
                             # Only record the columns that have changed
                             if previous_item is not None:
-                                print(
-                                    "\n\nFiguring out updated values:\n",
-                                    pformat(
-                                        list(
-                                            dictdiffer.diff(
-                                                item_flattened, previous_item
-                                            )
-                                        )
-                                    ),
-                                )
                                 updated_values = {
                                     key: value
                                     for key, value in item_flattened.items()
@@ -422,19 +398,6 @@ def file(
 
                                 pdb.set_trace()
                                 assert False
-
-            else:
-                # no --id - so just correct for reserved columns and add item["_commit"]
-                for item in items:
-                    item = jsonify_all(fix_reserved_columns(item))
-                    item["_commit"] = commit_pk
-                # In this case item table needs a foreign key on 'commit'
-                db[item_table].insert_all(
-                    items,
-                    column_order=("_id",),
-                    alter=True,
-                    foreign_keys=(("_commit", "commits", "id"),),
-                )
 
     # Create any necessary views
     create_views(
@@ -563,3 +526,33 @@ def get_versions_and_hashes(db, namespace):
             item_id_to_version[row["item_id"]] = row["max_version"]
             item_id_to_last_full_hash[row["item_id"]] = row["item_full_hash"]
     return item_id_to_version, item_id_to_last_full_hash
+
+
+def validate_items_have_id_columns(items, ids, git_hash):
+    _ids_set = set(ids)
+    bad_items = [
+        bad_item for bad_item in items if not _ids_set.issubset(bad_item.keys())
+    ]
+    if bad_items:
+        raise click.ClickException(
+            "Commit: {} - every item must have the --id keys. These items did not:\n{}".format(
+                git_hash, json.dumps(bad_items[:5], indent=4, default=str)
+            )
+        )
+
+
+class DuplicateIdsException(click.ClickException):
+    def __init__(self, git_hash, items, fixed_ids, item_id):
+        message = "Commit: {} - found multiple items with the same ID:\n{}".format(
+            git_hash,
+            json.dumps(
+                [
+                    item
+                    for item in items
+                    if _hash(dict((id, item.get(id)) for id in fixed_ids)) == item_id
+                ][:5],
+                indent=4,
+                default=str,
+            ),
+        )
+        super().__init__(message)
