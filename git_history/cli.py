@@ -230,7 +230,11 @@ def file(
                 continue
 
             # list() to resolve generators for repeated access later
-            items = list(convert_function(content))
+            try:
+                items = list(convert_function(content))
+            except Exception:
+                print("\nError in commit: {}".format(git_hash))
+                raise
 
             # Remove any --ignore columns
             items = remove_ignore_columns(items, ignore)
