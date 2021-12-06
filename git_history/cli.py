@@ -405,9 +405,7 @@ def file(
                                 assert False
 
     # Create any necessary views
-    create_views(
-        db, version_table=version_table, version_detail_view=version_detail_view
-    )
+    create_views(db, namespace)
 
 
 def _hash(record):
@@ -483,22 +481,30 @@ def remove_ignore_columns(items, ignore):
         return items
 
 
-def create_views(db, version_table, version_detail_view):
-    if db[version_table].exists():
+def create_views(db, namespace):
+    if db["{}_version".format(namespace)].exists():
         sql = textwrap.dedent(
             """
             select
-                commits.commit_at as _commit_at,
-                {version_table}.*,
-                commits.hash as _commit_hash
-            from
-                {version_table}
-                join commits on commits.id = {version_table}._commit""".format(
-                version_table=version_table
+              commits.commit_at as _commit_at,
+              commits.hash as _commit_hash,
+              {namespace}_version.*,
+              (
+                select json_group_array(name) from columns
+                where id in (
+                  select column from {namespace}_changed
+                  where item_version = {namespace}_version._id
+                )
+            ) as _changed_columns
+            from {namespace}_version
+              join commits on commits.id = {namespace}_version._commit
+              join {namespace}_changed on {namespace}_version._id = {namespace}_changed.item_version
+            """.format(
+                namespace=namespace
             )
         ).strip()
         db.create_view(
-            version_detail_view,
+            "{namespace}_version_detail".format(namespace=namespace),
             sql,
             ignore=True,
         )

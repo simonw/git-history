@@ -174,6 +174,29 @@ def repo(tmpdir):
     return make_repo(tmpdir)
 
 
+def expected_create_view(namespace):
+    return textwrap.dedent(
+        """
+        CREATE VIEW {namespace}_version_detail AS select
+          commits.commit_at as _commit_at,
+          commits.hash as _commit_hash,
+          {namespace}_version.*,
+          (
+            select json_group_array(name) from columns
+            where id in (
+              select column from {namespace}_changed
+              where item_version = {namespace}_version._id
+            )
+        ) as _changed_columns
+        from {namespace}_version
+          join commits on commits.id = {namespace}_version._commit
+          join {namespace}_changed on {namespace}_version._id = {namespace}_changed.item_version;
+    """.format(
+            namespace=namespace
+        )
+    ).strip()
+
+
 @pytest.mark.parametrize("namespace", (None, "custom"))
 def test_file_without_id(repo, tmpdir, namespace):
     runner = CliRunner()
@@ -238,9 +261,7 @@ def test_file_with_id(repo, tmpdir, namespace):
     db = sqlite_utils.Database(db_path)
     item_table = namespace or "item"
     version_table = "{}_version".format(item_table)
-    assert (
-        db.schema
-        == """
+    assert db.schema == """
 CREATE TABLE [namespaces] (
    [id] INTEGER PRIMARY KEY,
    [name] TEXT
@@ -282,16 +303,10 @@ CREATE TABLE [{namespace}_changed] (
    [column] INTEGER REFERENCES [columns]([id]),
    PRIMARY KEY ([item_version], [column])
 );
-CREATE VIEW {namespace}_version_detail AS select
-    commits.commit_at as _commit_at,
-    {namespace}_version.*,
-    commits.hash as _commit_hash
-from
-    {namespace}_version
-    join commits on commits.id = {namespace}_version._commit;
+{view}
 """.strip().format(
-            namespace=namespace or "item"
-        )
+        namespace=namespace or "item",
+        view=expected_create_view(namespace or "item"),
     )
     assert db["commits"].count == 2
     # Should have no duplicates
@@ -308,7 +323,7 @@ from
         {"product_id": None, "_version": 2, "name": "Tonic 2"},
         {"product_id": 3, "_version": 1, "name": "Rum"},
     ]
-    changed_columns = list(
+    changed = list(
         db.query(
             """
         select
@@ -325,7 +340,7 @@ from
             )
         )
     )
-    assert changed_columns == [
+    assert changed == [
         {"product_id": 1, "version": 1, "column_name": "name"},
         {"product_id": 1, "version": 1, "column_name": "product_id"},
         {"product_id": 2, "version": 1, "column_name": "name"},
@@ -333,6 +348,61 @@ from
         {"product_id": 2, "version": 2, "column_name": "name"},
         {"product_id": 3, "version": 1, "column_name": "name"},
         {"product_id": 3, "version": 1, "column_name": "product_id"},
+    ]
+    # Test the view
+    view_rows = list(
+        db.query(
+            "select _version, product_id, name, _changed_columns from {}_version_detail".format(
+                namespace or "item"
+            )
+        )
+    )
+    # Sort order of _changed_columns JSON is undefined, so fix that
+    for row in view_rows:
+        row["_changed_columns"] = list(sorted(json.loads(row["_changed_columns"])))
+    assert view_rows == [
+        {
+            "_version": 1,
+            "product_id": 1,
+            "name": "Gin",
+            "_changed_columns": ["name", "product_id"],
+        },
+        {
+            "_version": 1,
+            "product_id": 1,
+            "name": "Gin",
+            "_changed_columns": ["name", "product_id"],
+        },
+        {
+            "_version": 1,
+            "product_id": 2,
+            "name": "Tonic",
+            "_changed_columns": ["name", "product_id"],
+        },
+        {
+            "_version": 1,
+            "product_id": 2,
+            "name": "Tonic",
+            "_changed_columns": ["name", "product_id"],
+        },
+        {
+            "_version": 2,
+            "product_id": None,
+            "name": "Tonic 2",
+            "_changed_columns": ["name"],
+        },
+        {
+            "_version": 1,
+            "product_id": 3,
+            "name": "Rum",
+            "_changed_columns": ["name", "product_id"],
+        },
+        {
+            "_version": 1,
+            "product_id": 3,
+            "name": "Rum",
+            "_changed_columns": ["name", "product_id"],
+        },
     ]
 
 
@@ -454,16 +524,7 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
         "   [product_id] INTEGER,\n"
         "   [name] TEXT\n"
-        ");\n"
-        "CREATE VIEW {}_version_detail AS select\n".format(namespace or "item")
-        + "    commits.commit_at as _commit_at,\n"
-        "    {}_version.*,\n".format(namespace or "item")
-        + "    commits.hash as _commit_hash\n"
-        "from\n"
-        "    {}_version\n".format(namespace or "item")
-        + "    join commits on commits.id = {}_version._commit;".format(
-            namespace or "item"
-        )
+        ");\n" + expected_create_view(namespace or "item")
     )
     assert db["commits"].count == 2
     # Should have no duplicates
@@ -501,9 +562,8 @@ def test_file_with_reserved_columns(repo, tmpdir):
         )
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
-    assert (
-        db.schema
-        == textwrap.dedent(
+    expected_schema = (
+        textwrap.dedent(
             """
         CREATE TABLE [namespaces] (
            [id] INTEGER PRIMARY KEY,
@@ -535,17 +595,13 @@ def test_file_with_reserved_columns(repo, tmpdir):
            [_version_] TEXT,
            [_commit_] TEXT,
            [rowid_] INTEGER
-        );
-        CREATE VIEW item_version_detail AS select
-            commits.commit_at as _commit_at,
-            item_version.*,
-            commits.hash as _commit_hash
-        from
-            item_version
-            join commits on commits.id = item_version._commit;
-        """
-        ).strip()
-    )
+        );"""
+        )
+        + "\n"
+        + expected_create_view("item")
+    ).strip()
+
+    assert db.schema == expected_schema
     item_version = [
         r
         for r in db.query(
@@ -637,16 +693,10 @@ def test_csv_tsv(repo, tmpdir, file):
            [_commit] INTEGER REFERENCES [commits]([id]),
            [TreeID] TEXT,
            [name] TEXT
-        );
-        CREATE VIEW item_version_detail AS select
-            commits.commit_at as _commit_at,
-            item_version.*,
-            commits.hash as _commit_hash
-        from
-            item_version
-            join commits on commits.id = item_version._commit;
-        """
+        );"""
         ).strip()
+        + "\n"
+        + expected_create_view("item")
     )
 
 

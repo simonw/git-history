@@ -166,12 +166,19 @@ CREATE TABLE [item_changed] (
    PRIMARY KEY ([item_version], [column])
 );
 CREATE VIEW item_version_detail AS select
-    commits.commit_at as _commit_at,
-    item_version.*,
-    commits.hash as _commit_hash
-from
-    item_version
-    join commits on commits.id = item_version._commit;
+  commits.commit_at as _commit_at,
+  commits.hash as _commit_hash,
+  item_version.*,
+  (
+    select json_group_array(name) from columns
+    where id in (
+      select column from item_changed
+      where item_version = item_version._id
+    )
+) as _changed_columns
+from item_version
+  join commits on commits.id = item_version._commit
+  join item_changed on item_version._id = item_changed.item_version;
 ```
 <!-- [[[end]]] -->
 
@@ -201,7 +208,7 @@ You can use the `--full-versions` option to store full copies of the item at eac
 
 #### item_version_detail view
 
-This SQL view joins `item_version` against `commits` to add two further columns: `_commit_at` with the date of the commit, and `_commit_hash` with the Git commit hash.
+This SQL view joins `item_version` against `commits` to add three further columns: `_commit_at` with the date of the commit, and `_commit_hash` with the Git commit hash.
 
 #### item_changed
 
@@ -228,7 +235,7 @@ cog.out("Note that ")
 cog.out(", ".join("`{}`".format(r) for r in RESERVED))
 cog.out(" are considered reserved column names for the purposes of this tool.")
 ]]] -->
-Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `_commit_at`, `_commit_hash`, `rowid` are considered reserved column names for the purposes of this tool.
+Note that `_id`, `_item_full_hash`, `_item`, `_item_id`, `_version`, `_commit`, `_item_id`, `_commit_at`, `_commit_hash`, `_changed_columns`, `rowid` are considered reserved column names for the purposes of this tool.
 <!-- [[[end]]] -->
 
 If your data contains any of these they will be renamed to add a trailing underscore, for example `_id_`, `_item_`, `_version_`, to avoid clashing with the reserved columns.
