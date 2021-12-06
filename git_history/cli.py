@@ -5,7 +5,7 @@ import json
 import sqlite_utils
 import textwrap
 from pathlib import Path
-from .utils import fix_reserved_columns, jsonify_if_needed
+from .utils import RESERVED_SET, fix_reserved_columns, jsonify_if_needed
 
 import dictdiffer
 from pprint import pformat
@@ -303,6 +303,7 @@ def file(
                     )
 
                     updated_values = {}
+                    updated_columns = set()
 
                     if item_is_new or item_full_hash_has_changed:
                         # TODO: delete-me
@@ -341,12 +342,15 @@ def file(
                         else:
                             # Only record the columns that have changed
                             if previous_item is not None:
-                                updated_values = {
-                                    key: value
-                                    for key, value in item_flattened.items()
-                                    if (key not in previous_item)
-                                    or previous_item[key] != value
-                                }
+                                for column in (
+                                    item_flattened.keys() | previous_item.keys()
+                                ):
+                                    if column in RESERVED_SET:
+                                        continue
+                                    value = item_flattened.get(column)
+                                    if value != previous_item.get(column):
+                                        updated_values[column] = value
+                                        updated_columns.add(column)
                             else:
                                 updated_values = item_flattened
 
@@ -374,7 +378,7 @@ def file(
                             .last_pk
                         )
 
-                        if updated_values:
+                        if updated_columns:
                             # Record which columns changed in the changed m2m table
                             db[changed_table].insert_all(
                                 (
@@ -382,7 +386,7 @@ def file(
                                         "item_version": item_version_id,
                                         "column": column_id(column),
                                     }
-                                    for column in updated_values
+                                    for column in updated_columns
                                 ),
                                 pk=("item_version", "column"),
                                 foreign_keys=(
