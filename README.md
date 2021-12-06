@@ -86,8 +86,7 @@ CREATE UNIQUE INDEX [idx_commits_namespace_hash]
 CREATE TABLE [item] (
    [IncidentID] TEXT,
    [Location] TEXT,
-   [Type] TEXT,
-   [_commit] INTEGER REFERENCES [commits]([id])
+   [Type] TEXT
 );
 ```
 <!-- [[[end]]] -->
@@ -140,12 +139,8 @@ CREATE UNIQUE INDEX [idx_commits_namespace_hash]
     ON [commits] ([namespace], [hash]);
 CREATE TABLE [item] (
    [_id] INTEGER PRIMARY KEY,
-   [_item_id] TEXT,
-   [IncidentID] TEXT,
-   [Location] TEXT,
-   [Type] TEXT,
-   [_commit] INTEGER
-);
+   [_item_id] TEXT
+, [IncidentID] TEXT, [Location] TEXT, [Type] TEXT, [_commit] INTEGER);
 CREATE UNIQUE INDEX [idx_item__item_id]
     ON [item] ([_item_id]);
 CREATE TABLE [item_version] (
