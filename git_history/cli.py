@@ -165,12 +165,7 @@ def file(
 
     namespace_id = db["namespaces"].lookup({"name": namespace})
 
-    commits_to_skip = (
-        set(r[0] for r in db.execute("select hash from commits").fetchall())
-        if db["commits"].exists()
-        else set()
-    )
-
+    commits_to_skip = get_commit_hashes(db)
     if skip_hashes:
         commits_to_skip.update(skip_hashes)
 
@@ -191,26 +186,12 @@ def file(
     resolved_filepath = str(Path(filepath).resolve())
     resolved_repo = str(Path(repo).resolve())
 
-    item_id_to_version = {}
-    item_id_to_last_full_hash = {}
+    # In-memory caches of the most recent version and last full hash for each item_id
+    item_id_to_version, item_id_to_last_full_hash = get_versions_and_hashes(
+        db, namespace
+    )
 
-    if db[version_table].exists():
-        # TODO: Make this work with namespaces other than 'item'
-        sql = """
-        select
-            item._item_id as item_id,
-            max(item_version._version) as max_version,
-            item_version._item_full_hash as item_full_hash
-        from
-            item_version
-            join item on item_version._item = item._id
-        group by
-            _item_id
-        """
-        for row in db.query(sql):
-            item_id_to_version[row["item_id"]] = row["max_version"]
-            item_id_to_last_full_hash[row["item_id"]] = row["item_full_hash"]
-
+    # In-memory cache for db["columns"].lookup(...)
     column_name_to_id = {}
 
     def column_id(column):
@@ -242,7 +223,7 @@ def file(
                 continue
 
         if True:  # with db.conn:  # One transaction per git commit processed
-            commit_id = db["commits"].lookup(
+            commit_pk = db["commits"].lookup(
                 {"namespace": namespace_id, "hash": git_hash},
                 {"commit_at": git_commit_at.isoformat()},
                 foreign_keys=(("namespace", "namespaces", "id"),),
@@ -353,7 +334,7 @@ def file(
                         # Add or update item
                         item_pk = db[item_table].lookup(
                             {"_item_id": item_id},
-                            dict(item_flattened, _commit=commit_id),
+                            dict(item_flattened, _commit=commit_pk),
                             column_order=("_id", "_item_id"),
                             foreign_keys=(("_commit", "commits", "id"),),
                             pk="_id",
@@ -365,7 +346,7 @@ def file(
                                 item_flattened,
                                 _item=item_pk,
                                 _version=version,
-                                _commit=commit_id,
+                                _commit=commit_pk,
                             )
                         else:
                             # Only record the columns that have changed
@@ -393,7 +374,7 @@ def file(
                                 updated_values,
                                 _item=item_pk,
                                 _version=version,
-                                _commit=commit_id,
+                                _commit=commit_pk,
                                 _item_full_hash=item_full_hash,
                             )
 
@@ -442,7 +423,7 @@ def file(
                 # no --id - so just correct for reserved columns and add item["_commit"]
                 for item in items:
                     item = jsonify_all(fix_reserved_columns(item))
-                    item["_commit"] = commit_id
+                    item["_commit"] = commit_pk
                 # In this case item table needs a foreign key on 'commit'
                 db[item_table].insert_all(
                     items,
@@ -549,3 +530,32 @@ def create_views(db, version_table, version_detail_view):
             sql,
             ignore=True,
         )
+
+
+def get_commit_hashes(db):
+    return (
+        set(r[0] for r in db.execute("select hash from commits").fetchall())
+        if db["commits"].exists()
+        else set()
+    )
+
+
+def get_versions_and_hashes(db, namespace):
+    item_id_to_version = {}
+    item_id_to_last_full_hash = {}
+    if db[namespace + "_version"].exists():
+        sql = """
+        select
+            {namespace}._item_id as item_id,
+            max({namespace}_version._version) as max_version,
+            {namespace}_version._item_full_hash as item_full_hash
+        from
+            {namespace}_version
+            join {namespace} on {namespace}_version._item = item._id
+        group by
+            _item_id
+        """
+        for row in db.query(sql):
+            item_id_to_version[row["item_id"]] = row["max_version"]
+            item_id_to_last_full_hash[row["item_id"]] = row["item_full_hash"]
+    return item_id_to_version, item_id_to_last_full_hash
