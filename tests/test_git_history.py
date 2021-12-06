@@ -43,11 +43,11 @@ def make_repo(tmpdir):
         json.dumps(
             [
                 {
-                    "item_id": 1,
+                    "product_id": 1,
                     "name": "Gin",
                 },
                 {
-                    "item_id": 2,
+                    "product_id": 2,
                     "name": "Tonic",
                 },
             ]
@@ -116,15 +116,15 @@ def make_repo(tmpdir):
         json.dumps(
             [
                 {
-                    "item_id": 1,
+                    "product_id": 1,
                     "name": "Gin",
                 },
                 {
-                    "item_id": 2,
+                    "product_id": 2,
                     "name": "Tonic 2",
                 },
                 {
-                    "item_id": 3,
+                    "product_id": 3,
                     "name": "Rum",
                 },
             ]
@@ -200,14 +200,14 @@ def test_file_without_id(repo, tmpdir, namespace):
         ");\n"
         "CREATE UNIQUE INDEX [idx_commits_namespace_hash]\n"
         "    ON [commits] ([namespace], [hash]);\n"
-        "CREATE TABLE [{}] (\n".format(namespace or "item") + "   [item_id] INTEGER,\n"
-        "   [name] TEXT,\n"
-        "   [_commit] INTEGER REFERENCES [commits]([id])\n"
+        "CREATE TABLE [{}] (\n".format(namespace or "item")
+        + "   [product_id] INTEGER,\n"
+        "   [name] TEXT\n"
         ");"
     )
     assert db["commits"].count == 2
     # Should have some duplicates
-    assert [(r["item_id"], r["name"]) for r in db[namespace or "item"].rows] == [
+    assert [(r["product_id"], r["name"]) for r in db[namespace or "item"].rows] == [
         (1, "Gin"),
         (2, "Tonic"),
         (1, "Gin"),
@@ -230,7 +230,7 @@ def test_file_with_id(repo, tmpdir, namespace):
                 "--repo",
                 str(repo),
                 "--id",
-                "item_id",
+                "product_id",
             ]
             + (["--namespace", namespace] if namespace else []),
         )
@@ -257,11 +257,8 @@ CREATE UNIQUE INDEX [idx_commits_namespace_hash]
     ON [commits] ([namespace], [hash]);
 CREATE TABLE [{namespace}] (
    [_id] INTEGER PRIMARY KEY,
-   [_item_id] TEXT,
-   [item_id] INTEGER,
-   [name] TEXT,
-   [_commit] INTEGER
-);
+   [_item_id] TEXT
+, [product_id] INTEGER, [name] TEXT, [_commit] INTEGER);
 CREATE UNIQUE INDEX [idx_{namespace}__item_id]
     ON [{namespace}] ([_item_id]);
 CREATE TABLE [{namespace}_version] (
@@ -269,7 +266,7 @@ CREATE TABLE [{namespace}_version] (
    [_item] INTEGER REFERENCES [{namespace}]([_id]),
    [_version] INTEGER,
    [_commit] INTEGER REFERENCES [commits]([id]),
-   [item_id] INTEGER,
+   [product_id] INTEGER,
    [name] TEXT,
    [_item_full_hash] TEXT
 );
@@ -301,24 +298,41 @@ from
     item_version = [
         r
         for r in db.query(
-            "select item_id, _version, name from {}".format(version_table)
+            "select product_id, _version, name from {}".format(version_table)
         )
     ]
     assert item_version == [
-        {"item_id": 1, "_version": 1, "name": "Gin"},
-        {"item_id": 2, "_version": 1, "name": "Tonic"},
-        # item_id is None because it did not change here
-        {"item_id": None, "_version": 2, "name": "Tonic 2"},
-        {"item_id": 3, "_version": 1, "name": "Rum"},
+        {"product_id": 1, "_version": 1, "name": "Gin"},
+        {"product_id": 2, "_version": 1, "name": "Tonic"},
+        # product_id is None because it did not change here
+        {"product_id": None, "_version": 2, "name": "Tonic 2"},
+        {"product_id": 3, "_version": 1, "name": "Rum"},
     ]
-    assert [r for r in db["{}_changed".format(namespace or "item")].rows] == [
-        {"item_version": 1, "column": 1},
-        {"item_version": 1, "column": 2},
-        {"item_version": 2, "column": 1},
-        {"item_version": 2, "column": 2},
-        {"item_version": 3, "column": 2},
-        {"item_version": 4, "column": 1},
-        {"item_version": 4, "column": 2},
+    changed_columns = list(
+        db.query(
+            """
+        select
+          {namespace}.product_id,
+          {namespace}_version._version as version,
+          columns.name as column_name
+        from {namespace}_changed
+          join columns on {namespace}_changed.column = columns.id
+          join {namespace}_version on {namespace}_changed.item_version = {namespace}_version._id
+          join {namespace} on {namespace}._id = {namespace}_version._item
+        order by {namespace}.product_id, {namespace}_version._version, columns.name
+    """.format(
+                namespace=namespace or "item"
+            )
+        )
+    )
+    assert changed_columns == [
+        {"product_id": 1, "version": 1, "column_name": "name"},
+        {"product_id": 1, "version": 1, "column_name": "product_id"},
+        {"product_id": 2, "version": 1, "column_name": "name"},
+        {"product_id": 2, "version": 1, "column_name": "product_id"},
+        {"product_id": 2, "version": 2, "column_name": "name"},
+        {"product_id": 3, "version": 1, "column_name": "name"},
+        {"product_id": 3, "version": 1, "column_name": "product_id"},
     ]
 
 
@@ -334,28 +348,28 @@ def test_file_with_id_resume(repo, tmpdir):
             "--repo",
             str(repo),
             "--id",
-            "item_id",
+            "product_id",
         ],
     )
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     item_version = [
-        r for r in db.query("select item_id, _version, name from item_version")
+        r for r in db.query("select product_id, _version, name from item_version")
     ]
     assert item_version == [
-        {"item_id": 1, "_version": 1, "name": "Gin"},
-        {"item_id": 2, "_version": 1, "name": "Tonic"},
-        {"item_id": None, "_version": 2, "name": "Tonic 2"},
-        {"item_id": 3, "_version": 1, "name": "Rum"},
+        {"product_id": 1, "_version": 1, "name": "Gin"},
+        {"product_id": 2, "_version": 1, "name": "Tonic"},
+        {"product_id": None, "_version": 2, "name": "Tonic 2"},
+        {"product_id": 3, "_version": 1, "name": "Rum"},
     ]
     # Now we edit, commit and try again
     (repo / "items.json").write_text(
         json.dumps(
             [
-                {"item_id": 1, "name": "Gin"},
-                {"item_id": 2, "name": "Tonic 2"},
+                {"product_id": 1, "name": "Gin"},
+                {"product_id": 2, "name": "Tonic 2"},
                 # This line has changed from "Rum" to "Rum Pony":
-                {"item_id": 3, "name": "Rum Pony"},
+                {"product_id": 3, "name": "Rum Pony"},
             ]
         ),
         "utf-8",
@@ -370,19 +384,23 @@ def test_file_with_id_resume(repo, tmpdir):
             "--repo",
             str(repo),
             "--id",
-            "item_id",
+            "product_id",
         ],
+        catch_exceptions=False,
     )
     assert result2.exit_code == 0
     item_version2 = [
-        r for r in db.query("select _item, item_id, _version, name from item_version")
+        r
+        for r in db.query(
+            "select _item, product_id, _version, name from item_version order by _item, _version"
+        )
     ]
     assert item_version2 == [
-        {"_item": 1, "item_id": 1, "_version": 1, "name": "Gin"},
-        {"_item": 2, "item_id": 2, "_version": 1, "name": "Tonic"},
-        {"_item": 2, "item_id": None, "_version": 2, "name": "Tonic 2"},
-        {"_item": 3, "item_id": 3, "_version": 1, "name": "Rum"},
-        {"_item": 3, "item_id": None, "_version": 2, "name": "Rum Pony"},
+        {"_item": 1, "product_id": 1, "_version": 1, "name": "Gin"},
+        {"_item": 2, "product_id": 2, "_version": 1, "name": "Tonic"},
+        {"_item": 2, "product_id": None, "_version": 2, "name": "Tonic 2"},
+        {"_item": 3, "product_id": 3, "_version": 1, "name": "Rum"},
+        {"_item": 3, "product_id": None, "_version": 2, "name": "Rum Pony"},
     ]
 
 
@@ -400,7 +418,7 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
                 "--repo",
                 str(repo),
                 "--id",
-                "item_id",
+                "product_id",
                 "--full-versions",
             ]
             + (["--namespace", namespace] if namespace else []),
@@ -425,11 +443,8 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
         "CREATE UNIQUE INDEX [idx_commits_namespace_hash]\n"
         "    ON [commits] ([namespace], [hash]);\n"
         "CREATE TABLE [{}] (\n".format(item_table) + "   [_id] INTEGER PRIMARY KEY,\n"
-        "   [_item_id] TEXT,\n"
-        "   [item_id] INTEGER,\n"
-        "   [name] TEXT,\n"
-        "   [_commit] INTEGER\n"
-        ");\n"
+        "   [_item_id] TEXT\n"
+        ", [product_id] INTEGER, [name] TEXT, [_commit] INTEGER);\n"
         "CREATE UNIQUE INDEX [idx_{}__item_id]\n".format(item_table)
         + "    ON [{}] ([_item_id]);\n".format(item_table)
         + "CREATE TABLE [{}] (\n".format(version_table)
@@ -437,7 +452,7 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
         "   [_item] INTEGER REFERENCES [{}]([_id]),\n".format(item_table)
         + "   [_version] INTEGER,\n"
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
-        "   [item_id] INTEGER,\n"
+        "   [product_id] INTEGER,\n"
         "   [name] TEXT\n"
         ");\n"
         "CREATE VIEW {}_version_detail AS select\n".format(namespace or "item")
@@ -455,14 +470,14 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
     item_version = [
         r
         for r in db.query(
-            "select item_id, _version, name from {}".format(version_table)
+            "select product_id, _version, name from {}".format(version_table)
         )
     ]
     assert item_version == [
-        {"item_id": 1, "_version": 1, "name": "Gin"},
-        {"item_id": 2, "_version": 1, "name": "Tonic"},
-        {"item_id": 2, "_version": 2, "name": "Tonic 2"},
-        {"item_id": 3, "_version": 1, "name": "Rum"},
+        {"product_id": 1, "_version": 1, "name": "Gin"},
+        {"product_id": 2, "_version": 1, "name": "Tonic"},
+        {"product_id": 2, "_version": 2, "name": "Tonic 2"},
+        {"product_id": 3, "_version": 1, "name": "Rum"},
     ]
 
 
@@ -506,14 +521,8 @@ def test_file_with_reserved_columns(repo, tmpdir):
             ON [commits] ([namespace], [hash]);
         CREATE TABLE [item] (
            [_id] INTEGER PRIMARY KEY,
-           [_item_id] TEXT,
-           [_id_] INTEGER,
-           [_item_] TEXT,
-           [_version_] TEXT,
-           [_commit_] TEXT,
-           [rowid_] INTEGER,
-           [_commit] INTEGER
-        );
+           [_item_id] TEXT
+        , [_id_] INTEGER, [_item_] TEXT, [_version_] TEXT, [_commit_] TEXT, [rowid_] INTEGER, [_commit] INTEGER);
         CREATE UNIQUE INDEX [idx_item__item_id]
             ON [item] ([_item_id]);
         CREATE TABLE [item_version] (
@@ -617,11 +626,8 @@ def test_csv_tsv(repo, tmpdir, file):
             ON [commits] ([namespace], [hash]);
         CREATE TABLE [item] (
            [_id] INTEGER PRIMARY KEY,
-           [_item_id] TEXT,
-           [TreeID] TEXT,
-           [name] TEXT,
-           [_commit] INTEGER
-        );
+           [_item_id] TEXT
+        , [TreeID] TEXT, [name] TEXT, [_commit] INTEGER);
         CREATE UNIQUE INDEX [idx_item__item_id]
             ON [item] ([_item_id]);
         CREATE TABLE [item_version] (
@@ -647,14 +653,8 @@ def test_csv_tsv(repo, tmpdir, file):
 @pytest.mark.parametrize(
     "dialect,expected_schema",
     (
-        (
-            "excel",
-            "CREATE TABLE [item] (\n   [TreeID] TEXT,\n   [name] TEXT,\n   [_commit] INTEGER REFERENCES [commits]([id])\n)",
-        ),
-        (
-            "excel-tab",
-            "CREATE TABLE [item] (\n   [TreeID,name] TEXT,\n   [_commit] INTEGER REFERENCES [commits]([id])\n)",
-        ),
+        ("excel", "CREATE TABLE [item] (\n   [TreeID] TEXT,\n   [name] TEXT\n)"),
+        ("excel-tab", "CREATE TABLE [item] (\n   [TreeID,name] TEXT\n)"),
     ),
 )
 def test_csv_dialect(repo, tmpdir, dialect, expected_schema):
@@ -685,11 +685,11 @@ def test_csv_dialect(repo, tmpdir, dialect, expected_schema):
         (
             "json.loads(content.upper())",
             [
-                {"ITEM_ID": 1, "NAME": "GIN"},
-                {"ITEM_ID": 2, "NAME": "TONIC"},
-                {"ITEM_ID": 1, "NAME": "GIN"},
-                {"ITEM_ID": 2, "NAME": "TONIC 2"},
-                {"ITEM_ID": 3, "NAME": "RUM"},
+                {"PRODUCT_ID": 1, "NAME": "GIN"},
+                {"PRODUCT_ID": 2, "NAME": "TONIC"},
+                {"PRODUCT_ID": 1, "NAME": "GIN"},
+                {"PRODUCT_ID": 2, "NAME": "TONIC 2"},
+                {"PRODUCT_ID": 3, "NAME": "RUM"},
             ],
         ),
         # Generator
@@ -791,7 +791,7 @@ def test_reserved_columns_are_reserved(tmpdir, repo):
             "--repo",
             str(repo),
             "--id",
-            "item_id",
+            "product_id",
         ],
     )
     # Find all columns with _ prefixes and no suffix
