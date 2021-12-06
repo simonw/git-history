@@ -463,7 +463,7 @@ def compile_convert(convert, imports):
     locals = {}
     globals = {"json": json}
     for import_ in imports:
-        globals[import_] = __import__(import_)
+        globals[import_.split(".")[0]] = __import__(import_)
     exec(code_o, globals, locals)
     return locals["fn"]
 

@@ -321,6 +321,8 @@ You can import additional modules using `--import`. This example shows how you c
         ' \
       --id TreeID
 
+You can import nested modules such as [ElementTree](https://docs.python.org/3/library/xml.etree.elementtree.html)  using `--import xml.etree.ElementTree`, then refer to them in your function body as `xml.etree.ElementTree`.
+
 If your Python code spans more than one line it needs to include a `return` statement.
 
 You can also use Python generators in your `--convert` code, for example:

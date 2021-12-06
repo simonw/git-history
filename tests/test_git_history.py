@@ -763,6 +763,48 @@ def test_convert(repo, tmpdir, convert, expected_rows):
     assert rows == expected_rows
 
 
+def test_convert_xml(repo, tmpdir):
+    runner = CliRunner()
+    (repo / "items.xml").write_text(
+        """
+        <items>
+          <item name="one" value="1" />
+          <item name="two" value="2" />
+        </items>
+        """,
+        "utf-8",
+    )
+    subprocess.call(["git", "add", "items.xml"], cwd=str(repo))
+    subprocess.call(git_commit + ["-m", "items.xml"], cwd=str(repo))
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo / "items.xml"),
+            "--repo",
+            str(repo),
+            "--convert",
+            textwrap.dedent(
+                """
+                tree = xml.etree.ElementTree.fromstring(content)
+                return [el.attrib for el in tree.iter("item")]
+            """
+            ),
+            "--import",
+            "xml.etree.ElementTree",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    assert list(db["item"].rows) == [
+        {"name": "one", "value": "1"},
+        {"name": "two", "value": "2"},
+    ]
+
+
 @pytest.mark.parametrize(
     "options,expected_texts",
     (
