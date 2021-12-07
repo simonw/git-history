@@ -33,7 +33,7 @@ jobs:
         cache: pip
     - name: Install Python dependencies
       run: |
-        pip install s3-credentials
+        pip install s3-credentials datasette
         pip install -e '.'
     - name: Download pge-outages.db
       run: curl --fail -o pge-outages.db https://s3.amazonaws.com/git-history-demos/pge-outages.db
