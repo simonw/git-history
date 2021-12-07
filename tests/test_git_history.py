@@ -303,6 +303,8 @@ CREATE TABLE [{namespace}_changed] (
    PRIMARY KEY ([item_version], [column])
 );
 {view}
+CREATE INDEX [idx_{namespace}_version__item]
+    ON [{namespace}_version] ([_item]);
 """.strip().format(
         namespace=namespace or "item",
         view=expected_create_view(namespace or "item"),
@@ -505,7 +507,10 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
         "   [product_id] INTEGER,\n"
         "   [name] TEXT\n"
-        ");\n" + expected_create_view(namespace or "item")
+        ");\n"
+        + expected_create_view(namespace or "item")
+        + "\nCREATE INDEX [idx_{}__item]\n".format(version_table)
+        + "    ON [{}] ([_item]);".format(version_table)
     )
     assert db["commits"].count == 2
     # Should have no duplicates
@@ -580,6 +585,8 @@ def test_file_with_reserved_columns(repo, tmpdir):
         )
         + "\n"
         + expected_create_view("item")
+        + "\nCREATE INDEX [idx_item_version__item]\n"
+        "    ON [item_version] ([_item]);"
     ).strip()
 
     assert db.schema == expected_schema
@@ -678,6 +685,8 @@ def test_csv_tsv(repo, tmpdir, file):
         ).strip()
         + "\n"
         + expected_create_view("item")
+        + "\nCREATE INDEX [idx_item_version__item]\n"
+        "    ON [item_version] ([_item]);"
     )
 
 

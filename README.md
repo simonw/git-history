@@ -186,6 +186,8 @@ CREATE VIEW item_version_detail AS select
 ) as _changed_columns
 from item_version
   join commits on commits.id = item_version._commit;
+CREATE INDEX [idx_item_version__item]
+    ON [item_version] ([_item]);
 ```
 <!-- [[[end]]] -->
 

@@ -410,6 +410,9 @@ def file(
 
     # Create any necessary views
     create_views(db, namespace)
+    # ... and indexes
+    if db[version_table].exists():
+        db[version_table].create_index(["_item"], if_not_exists=True)
 
 
 def _hash(record):
