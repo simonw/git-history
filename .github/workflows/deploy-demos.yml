@@ -50,6 +50,9 @@ jobs:
         demos/ca-fires.sh
         demos/sf-bay-511.sh
     - name: Upload databases to S3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |-
         s3-credentials put-object git-history-demos pge-outages.db pge-outages.db
         s3-credentials put-object git-history-demos ca-fires.db ca-fires.db
