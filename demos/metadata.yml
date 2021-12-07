@@ -1,6 +1,6 @@
 title: git-history demos
 about: About these demos
-about_url: https://github.com/simonw/git-history/tree/main/demos
+about_url: https://github.com/simonw/git-history/blob/main/README.md#demos
 plugins:
   datasette-remote-metadata:
     url: https://raw.githubusercontent.com/simonw/git-history/main/demos/metadata.yml

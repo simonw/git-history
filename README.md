@@ -13,6 +13,14 @@ Install this tool using `pip`:
 
     $ pip install git-history
 
+## Demos
+
+[git-history-demos.datasette.io](http://git-history-demos.datasette.io/) hosts three example databases created using this tool:
+
+- [pge-outages](https://git-history-demos.datasette.io/pge-outages) shows a history of PG&E (the electricity supplier) [outages](https://pgealerts.alerts.pge.com/outagecenter/), using data collected in [simonw/pge-outages](https://github.com/simonw/pge-outages)
+- [ca-fires](https://git-history-demos.datasette.io/ca-fires) shows a history of fires in California reported on [fire.ca.gov/incidents](https://www.fire.ca.gov/incidents/), from data in [simonw/ca-fires-history](https://github.com/simonw/ca-fires-history)
+- [sf-bay-511](https://git-history-demos.datasette.io/sf-bay-511) has records of San Francisco Bay Area traffic and transit incident data from [511.org](https://511.org/), collected in [dbreunig/511-events-history](https://github.com/dbreunig/511-events-history)
+
 ## Usage
 
 This tool can be run against a Git repository that holds a file that contains JSON, CSV/TSV or some other format and which has multiple versions tracked in the Git history. Read [Git scraping: track changes over time by scraping to a Git repository](https://simonwillison.net/2020/Oct/9/git-scraping/) to understand how you might create such a repository.
