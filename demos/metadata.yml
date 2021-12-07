@@ -4,3 +4,16 @@ about_url: https://github.com/simonw/git-history/tree/main/demos
 plugins:
   datasette-remote-metadata:
     url: https://raw.githubusercontent.com/simonw/git-history/main/demos/metadata.yml
+databases:
+  pge:
+    title: PG&E Outages
+    source: simonw/pge-outages
+    source_url: https://github.com/simonw/pge-outages
+  511:
+    title: 511.org incidents
+    source: dbreunig/511-events-history
+    source_url: https://github.com/dbreunig/511-events-history
+  fires:
+    title: fire.ca.gov incidents
+    source: simonw/ca-fires-history
+    source_url: https://github.com/simonw/ca-fires-history
