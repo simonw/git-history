@@ -77,4 +77,5 @@ jobs:
           --install datasette-cluster-map \
           --install datasette-vega \
           -m demos/metadata.yml \
+          --branch main \
           --memory 4Gi
