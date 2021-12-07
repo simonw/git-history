@@ -389,7 +389,8 @@ CREATE INDEX [idx_{namespace}_version__item]
     ]
 
 
-def test_file_with_id_resume(repo, tmpdir):
+@pytest.mark.parametrize("namespace", (None, "custom"))
+def test_file_with_id_resume(repo, tmpdir, namespace):
     runner = CliRunner()
     db_path = str(tmpdir / "db.db")
     result = runner.invoke(
@@ -402,12 +403,17 @@ def test_file_with_id_resume(repo, tmpdir):
             str(repo),
             "--id",
             "product_id",
-        ],
+        ]
+        + (["--namespace", namespace] if namespace else []),
     )
+    namespace = namespace or "item"
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     item_version = [
-        r for r in db.query("select product_id, _version, name from item_version")
+        r
+        for r in db.query(
+            "select product_id, _version, name from {}_version".format(namespace)
+        )
     ]
     assert item_version == [
         {"product_id": 1, "_version": 1, "name": "Gin"},
@@ -438,14 +444,17 @@ def test_file_with_id_resume(repo, tmpdir):
             str(repo),
             "--id",
             "product_id",
-        ],
+        ]
+        + (["--namespace", namespace] if namespace else []),
         catch_exceptions=False,
     )
     assert result2.exit_code == 0
     item_version2 = [
         r
         for r in db.query(
-            "select _item, product_id, _version, name from item_version order by _item, _version"
+            "select _item, product_id, _version, name from {}_version order by _item, _version".format(
+                namespace
+            )
         )
     ]
     assert item_version2 == [

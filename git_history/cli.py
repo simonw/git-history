@@ -535,7 +535,7 @@ def get_versions_and_hashes(db, namespace):
             {namespace}_version._item_full_hash as item_full_hash
         from
             {namespace}_version
-            join {namespace} on {namespace}_version._item = item._id
+            join {namespace} on {namespace}_version._item = {namespace}._id
         group by
             _item_id
         """.format(
