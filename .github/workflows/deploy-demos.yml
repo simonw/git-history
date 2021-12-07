@@ -74,5 +74,7 @@ jobs:
           sf-bay-511.db \
           --install datasette-block-robots \
           --install datasette-remote-metadata \
+          --install datasette-cluster-map \
+          --install datasette-vega \
           -m demos/metadata.yml \
           --memory 4Gi
