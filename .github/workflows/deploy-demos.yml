@@ -1,0 +1,75 @@
+name: Build and deploy demos
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 1 * * *"
+
+jobs:
+  build_and_deploy_demos:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repo
+      uses: actions/checkout@v2
+    - name: Check out simonw/ca-fires-history
+      uses: actions/checkout@v2
+      with:
+        repository: simonw/ca-fires-history
+        path: ca-fires-history
+    - name: Check out simonw/pge-outages
+      uses: actions/checkout@v2
+      with:
+        repository: simonw/pge-outages
+        path: pge-outages
+    - name: Check out dbreunig/511-events-history
+      uses: actions/checkout@v2
+      with:
+        repository: dbreunig/511-events-history
+        path: 511-events-history
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.10"
+        cache: pip
+    - name: Install Python dependencies
+      run: |
+        pip install s3-credentials
+        pip install -e '.'
+    - name: Download pge-outages.db
+      run: curl --fail -o pge-outages.db https://s3.amazonaws.com/git-history-demos/pge-outages.db
+      continue-on-error: true
+    - name: Download ca-fires.db
+      run: curl --fail -o ca-fires.db https://s3.amazonaws.com/git-history-demos/ca-fires.db
+      continue-on-error: true
+    - name: Download sf-bay-511.db
+      run: curl --fail -o sf-bay-511.db https://s3.amazonaws.com/git-history-demos/sf-bay-511.db
+      continue-on-error: true
+    - name: Build the databases
+      run: |-
+        demos/pge-outages.sh
+        demos/ca-fires.sh
+        demos/sf-bay-511.sh
+    - name: Upload databases to S3
+      run: |-
+        s3-credentials put-object git-history-demos pge-outages.db pge-outages.db
+        s3-credentials put-object git-history-demos ca-fires.db ca-fires.db
+        s3-credentials put-object git-history-demos sf-bay-511.db sf-bay-511.db
+    - name: Set up Cloud Run
+      uses: google-github-actions/setup-gcloud@master
+      with:
+        version: '275.0.0'
+        service_account_email: ${{ secrets.GCP_SA_EMAIL }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+    - name: Deploy to Cloud Run
+      run: |-
+        gcloud config set run/region us-central1
+        gcloud config set project datasette-222320
+        datasette publish cloudrun \
+          --service git-history-demos \
+          pge-outages.db \
+          ca-fires.db \
+          sf-bay-511.db \
+          --install datasette-block-robots \
+          --install datasette-remote-metadata \
+          -m demos/metadata.yml \
+          --memory 4Gi
