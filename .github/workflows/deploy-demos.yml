@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "5 1 * * *"
+  push:
+    paths:
+      - ".github/workflows/deplay-demos.yml"
 
 jobs:
   build_and_deploy_demos:
@@ -76,6 +79,7 @@ jobs:
           --install datasette-remote-metadata \
           --install datasette-cluster-map \
           --install datasette-vega \
+          --install datasette-atom \
           -m demos/metadata.yml \
           --branch main \
           --memory 4Gi
