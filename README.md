@@ -7,6 +7,8 @@
 
 Tools for analyzing Git history using SQLite
 
+For background on this project see [git-history: a tool for analyzing scraped data collected using Git and SQLite](https://simonwillison.net/2021/Dec/7/git-history/)
+
 ## Installation
 
 Install this tool using `pip`:
