@@ -466,6 +466,63 @@ def test_file_with_id_resume(repo, tmpdir, namespace):
     ]
 
 
+def test_file_with_id_resume_two_namespaces(repo, tmpdir):
+    # https://github.com/simonw/git-history/issues/43
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+
+    def run(namespace):
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                str(repo / "items.json"),
+                "--repo",
+                str(repo),
+                "--id",
+                "product_id",
+                "--namespace",
+                namespace,
+            ],
+        )
+        assert result.exit_code == 0
+
+    for namespace in ("one", "two"):
+        run(namespace)
+
+    # Now modify items.json, commit and run again
+    (repo / "items.json").write_text(
+        json.dumps(
+            [
+                {"product_id": 1, "name": "Gin"},
+                {"product_id": 2, "name": "Tonic 2"},
+                {"product_id": 3, "name": "Rum Pony"},
+            ]
+        ),
+        "utf-8",
+    )
+    subprocess.call(git_commit + ["-a", "-m", "another"], cwd=str(repo))
+    for namespace in ("one", "two"):
+        run(namespace)
+
+    db = sqlite_utils.Database(db_path)
+    assert set(db.table_names()) == {
+        "namespaces",
+        "commits",
+        "one",
+        "one_version",
+        "columns",
+        "one_changed",
+        "two",
+        "two_version",
+        "two_changed",
+    }
+    # Should be five versions: Gin, Tonic -> Tonic 2, Rum -> Rum Pony
+    assert db["one_version"].count == 5
+    assert db["two_version"].count == 5
+
+
 @pytest.mark.parametrize("namespace", (None, "custom"))
 def test_file_with_id_full_versions(repo, tmpdir, namespace):
     runner = CliRunner()

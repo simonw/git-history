@@ -162,7 +162,7 @@ def file(
 
     namespace_id = db["namespaces"].lookup({"name": namespace})
 
-    commits_to_skip = get_commit_hashes(db)
+    commits_to_skip = get_commit_hashes(db, namespace)
     if skip_hashes:
         commits_to_skip.update(skip_hashes)
 
@@ -516,9 +516,20 @@ def create_views(db, namespace):
         )
 
 
-def get_commit_hashes(db):
+def get_commit_hashes(db, namespace):
     return (
-        set(r[0] for r in db.execute("select hash from commits").fetchall())
+        set(
+            r[0]
+            for r in db.execute(
+                """
+            select hash from commits
+            where namespace = (
+                select id from namespaces where name = ?
+            )
+        """,
+                [namespace],
+            ).fetchall()
+        )
         if db["commits"].exists()
         else set()
     )
