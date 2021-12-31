@@ -122,6 +122,11 @@ def cli():
     is_flag=True,
     help="Don't show progress bar",
 )
+@click.option(
+    "--re-encode",
+    type=str,
+    help="Re-encodes incoming data from this charset (e.g. --re-encode=iso-8859-1)",
+)
 @click.version_option()
 def file(
     database,
@@ -143,6 +148,7 @@ def file(
     wal,
     debug,
     silent,
+    re_encode,
 ):
     "Analyze the history of a specific file and write it to SQLite"
     if csv_ and convert:
@@ -231,7 +237,10 @@ def file(
 
             # list() to resolve generators for repeated access later
             try:
-                items = list(convert_function(content))
+                if re_encode:
+                    items = list(convert_function(content.decode(re_encode).encode("utf-8")))
+                else:
+                    items = list(convert_function(content))
             except Exception:
                 print("\nError in commit: {}".format(git_hash))
                 raise
