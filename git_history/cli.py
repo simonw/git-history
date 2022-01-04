@@ -27,9 +27,9 @@ def iterate_file_versions(
         if progress_bar:
             progress_bar.update(1)
         try:
-            blob = [b for b in commit.tree.blobs if b.name == relative_path][0]
+            blob = commit.tree[relative_path]
             yield commit.committed_datetime, commit.hexsha, blob.data_stream.read()
-        except IndexError:
+        except KeyError:
             # This commit doesn't have a copy of the requested file
             pass
 
