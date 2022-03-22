@@ -61,7 +61,7 @@ jobs:
         s3-credentials put-object git-history-demos ca-fires.db ca-fires.db
         s3-credentials put-object git-history-demos sf-bay-511.db sf-bay-511.db
     - name: Set up Cloud Run
-      uses: google-github-actions/setup-gcloud@master
+      uses: google-github-actions/setup-gcloud@v0
       with:
         version: '275.0.0'
         service_account_email: ${{ secrets.GCP_SA_EMAIL }}
