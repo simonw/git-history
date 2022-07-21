@@ -80,6 +80,7 @@ jobs:
           --install datasette-cluster-map \
           --install datasette-vega \
           --install datasette-atom \
+          --install datasette-render-timestamps \
           -m demos/metadata.yml \
           --branch main \
           --memory 4Gi
