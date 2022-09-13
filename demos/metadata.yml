@@ -9,11 +9,20 @@ databases:
     title: PG&E Outages
     source: simonw/pge-outages
     source_url: https://github.com/simonw/pge-outages
+    tables:
+      commits:
+        label_column: commit_at
   sf-bay-511:
     title: 511.org incidents
     source: dbreunig/511-events-history
     source_url: https://github.com/dbreunig/511-events-history
+    tables:
+      commits:
+        label_column: commit_at
   ca-fires:
     title: fire.ca.gov incidents
     source: simonw/ca-fires-history
     source_url: https://github.com/simonw/ca-fires-history
+    tables:
+      commits:
+        label_column: commit_at
