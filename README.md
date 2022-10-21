@@ -100,7 +100,8 @@ CREATE UNIQUE INDEX [idx_commits_namespace_hash]
 CREATE TABLE [item] (
    [IncidentID] TEXT,
    [Location] TEXT,
-   [Type] TEXT
+   [Type] TEXT,
+   [_commit] INTEGER REFERENCES [commits]([id])
 );
 ```
 <!-- [[[end]]] -->

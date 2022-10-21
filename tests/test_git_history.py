@@ -224,17 +224,18 @@ def test_file_without_id(repo, tmpdir, namespace):
         "    ON [commits] ([namespace], [hash]);\n"
         "CREATE TABLE [{}] (\n".format(namespace or "item")
         + "   [product_id] INTEGER,\n"
-        "   [name] TEXT\n"
+        "   [name] TEXT,\n"
+        "   [_commit] INTEGER REFERENCES [commits]([id])\n"
         ");"
     )
     assert db["commits"].count == 2
     # Should have some duplicates
-    assert [(r["product_id"], r["name"]) for r in db[namespace or "item"].rows] == [
-        (1, "Gin"),
-        (2, "Tonic"),
-        (1, "Gin"),
-        (2, "Tonic 2"),
-        (3, "Rum"),
+    assert [(r["product_id"], r["name"], r["_commit"]) for r in db[namespace or "item"].rows] == [
+        (1, "Gin", 1),
+        (2, "Tonic", 1),
+        (1, "Gin", 2),
+        (2, "Tonic 2", 2),
+        (3, "Rum", 2),
     ]
 
 

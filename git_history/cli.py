@@ -241,9 +241,14 @@ def file(
 
             if not ids:
                 # no --id - so just populate item_table and add item["_commit"]
-                for item in items:
-                    item = jsonify_all(fix_reserved_columns(item))
-                    item["_commit"] = commit_pk
+                items = [
+                    {
+                        **jsonify_all(fix_reserved_columns(item)),
+                        "_commit": commit_pk,
+                    }
+
+                    for item in items
+                ]
                 db[item_table].insert_all(
                     items,
                     column_order=("_id",),
