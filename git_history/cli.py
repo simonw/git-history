@@ -246,7 +246,6 @@ def file(
                         **jsonify_all(fix_reserved_columns(item)),
                         "_commit": commit_pk,
                     }
-
                     for item in items
                 ]
                 db[item_table].insert_all(

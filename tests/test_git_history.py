@@ -230,7 +230,9 @@ def test_file_without_id(repo, tmpdir, namespace):
     )
     assert db["commits"].count == 2
     # Should have some duplicates
-    assert [(r["product_id"], r["name"], r["_commit"]) for r in db[namespace or "item"].rows] == [
+    assert [
+        (r["product_id"], r["name"], r["_commit"]) for r in db[namespace or "item"].rows
+    ] == [
         (1, "Gin", 1),
         (2, "Tonic", 1),
         (1, "Gin", 2),
@@ -261,7 +263,9 @@ def test_file_with_id(repo, tmpdir, namespace):
     db = sqlite_utils.Database(db_path)
     item_table = namespace or "item"
     version_table = "{}_version".format(item_table)
-    assert db.schema == """
+    assert (
+        db.schema
+        == """
 CREATE TABLE [namespaces] (
    [id] INTEGER PRIMARY KEY,
    [name] TEXT
@@ -307,8 +311,9 @@ CREATE TABLE [{namespace}_changed] (
 CREATE INDEX [idx_{namespace}_version__item]
     ON [{namespace}_version] ([_item]);
 """.strip().format(
-        namespace=namespace or "item",
-        view=expected_create_view(namespace or "item"),
+            namespace=namespace or "item",
+            view=expected_create_view(namespace or "item"),
+        )
     )
     assert db["commits"].count == 2
     # Should have no duplicates
@@ -760,8 +765,14 @@ def test_csv_tsv(repo, tmpdir, file):
 @pytest.mark.parametrize(
     "dialect,expected_schema",
     (
-        ("excel", "CREATE TABLE [item] (\n   [TreeID] TEXT,\n   [name] TEXT\n)"),
-        ("excel-tab", "CREATE TABLE [item] (\n   [TreeID,name] TEXT\n)"),
+        (
+            "excel",
+            "CREATE TABLE [item] (\n   [TreeID] TEXT,\n   [name] TEXT,\n   [_commit] INTEGER REFERENCES [commits]([id])\n)",
+        ),
+        (
+            "excel-tab",
+            "CREATE TABLE [item] (\n   [TreeID,name] TEXT,\n   [_commit] INTEGER REFERENCES [commits]([id])\n)",
+        ),
     ),
 )
 def test_csv_dialect(repo, tmpdir, dialect, expected_schema):
@@ -876,8 +887,8 @@ def test_convert_xml(repo, tmpdir):
     assert result.exit_code == 0
     db = sqlite_utils.Database(db_path)
     assert list(db["item"].rows) == [
-        {"name": "one", "value": "1"},
-        {"name": "two", "value": "2"},
+        {"name": "one", "value": "1", "_commit": 1},
+        {"name": "two", "value": "2", "_commit": 1},
     ]
 
 
