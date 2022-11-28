@@ -93,7 +93,7 @@ def cli():
 )
 @click.option(
     "--convert",
-    help="Python code to read each file version content and return it as a list of dicts. Defaults to json.parse(content)",
+    help="Python code to read each file version content and return it as a list of dicts. Defaults to json.loads(content)",
 )
 @click.option(
     "--import",
