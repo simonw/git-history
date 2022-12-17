@@ -276,6 +276,7 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 - `--namespace TEXT` - use this if you wish to include the history of multiple different files in the same database. The default is `item` but you can set it to something else, which will produce tables with names like `yournamespace` and `yournamespace_version`.
 - `--wal` - Enable WAL mode on the created database file. Use this if you plan to run queries against the database while `git-history` is creating it.
 - `--silent` - don't show the progress bar.
+- `--re-encode TEXT` - re-encode the incoming data from this character encoding (e.g. `--re-encode=iso-8859-1` to convert from `Latin-1`); you can use `file -I filename` to get the encoding on some distributions.
 
 ### CSV and TSV data
 
