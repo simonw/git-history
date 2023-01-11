@@ -33,5 +33,5 @@ setup(
     """,
     install_requires=["click", "GitPython", "sqlite-utils>=3.19"],
     extras_require={"test": ["pytest", "cogapp"]},
-    python_requires=">=3.6",
+    python_requires=">=3.7",
 )
