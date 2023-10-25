@@ -23,7 +23,6 @@ Install this tool using `pip`:
 
 - [pge-outages](https://git-history-demos.datasette.io/pge-outages) shows a history of PG&E (the electricity supplier) [outages](https://pgealerts.alerts.pge.com/outagecenter/), using data collected in [simonw/pge-outages](https://github.com/simonw/pge-outages) converted using [pge-outages.sh](https://github.com/simonw/git-history/blob/main/demos/pge-outages.sh)
 - [ca-fires](https://git-history-demos.datasette.io/ca-fires) shows a history of fires in California reported on [fire.ca.gov/incidents](https://www.fire.ca.gov/incidents/), from data in [simonw/ca-fires-history](https://github.com/simonw/ca-fires-history) converted using [ca-fires.sh](https://github.com/simonw/git-history/blob/main/demos/ca-fires.sh)
-- [sf-bay-511](https://git-history-demos.datasette.io/sf-bay-511) has records of San Francisco Bay Area traffic and transit incident data from [511.org](https://511.org/), collected in [dbreunig/511-events-history](https://github.com/dbreunig/511-events-history) converted using [sf-bay-511.sh](https://github.com/simonw/git-history/blob/main/demos/sf-bay-511.sh)
 
 The demos are deployed using [Datasette](https://datasette.io/) on [Google Cloud Run](https://cloud.google.com/run/) by [this GitHub Actions workflow](https://github.com/simonw/git-history/blob/main/.github/workflows/deploy-demos.yml).
 

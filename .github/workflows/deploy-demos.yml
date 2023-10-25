@@ -24,11 +24,6 @@ jobs:
       with:
         repository: simonw/pge-outages
         path: pge-outages
-    - name: Check out dbreunig/511-events-history
-      uses: actions/checkout@v2
-      with:
-        repository: dbreunig/511-events-history
-        path: 511-events-history
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -44,14 +39,10 @@ jobs:
     - name: Download ca-fires.db
       run: curl --fail -o ca-fires.db https://s3.amazonaws.com/git-history-demos/ca-fires.db
       continue-on-error: true
-    - name: Download sf-bay-511.db
-      run: curl --fail -o sf-bay-511.db https://s3.amazonaws.com/git-history-demos/sf-bay-511.db
-      continue-on-error: true
     - name: Build the databases
       run: |-
         demos/pge-outages.sh
         demos/ca-fires.sh
-        demos/sf-bay-511.sh
     - name: Upload databases to S3
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -59,7 +50,6 @@ jobs:
       run: |-
         s3-credentials put-object git-history-demos pge-outages.db pge-outages.db
         s3-credentials put-object git-history-demos ca-fires.db ca-fires.db
-        s3-credentials put-object git-history-demos sf-bay-511.db sf-bay-511.db
     - name: Set up Cloud Run
       uses: google-github-actions/setup-gcloud@v0
       with:
@@ -74,7 +64,6 @@ jobs:
           --service git-history-demos \
           pge-outages.db \
           ca-fires.db \
-          sf-bay-511.db \
           --install datasette-block-robots \
           --install datasette-remote-metadata \
           --install datasette-cluster-map \
