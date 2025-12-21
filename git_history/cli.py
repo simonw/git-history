@@ -2,10 +2,29 @@ import click
 import git
 import hashlib
 import json
+import re
 import sqlite_utils
+import tempfile
 import textwrap
 from pathlib import Path
 from .utils import RESERVED_SET, fix_reserved_columns, jsonify_if_needed
+
+
+def is_repo_url(repo):
+    """Check if repo is a URL (HTTP/HTTPS or git@ SSH format)."""
+    if repo.startswith("http://") or repo.startswith("https://"):
+        return True
+    # git@github.com:user/repo or git@gitlab.com:user/repo.git
+    if re.match(r"^git@[^:]+:.+", repo):
+        return True
+    return False
+
+
+def clone_repo_url(url):
+    """Clone a repo URL to a temporary directory and return the path."""
+    temp_dir = tempfile.mkdtemp(prefix="git-history-")
+    git.Repo.clone_from(url, temp_dir)
+    return temp_dir
 
 
 def iterate_file_versions(
@@ -48,14 +67,13 @@ def cli():
 )
 @click.argument(
     "filepath",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False, allow_dash=False),
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
     required=True,
 )
 @click.option(
     "--repo",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, allow_dash=False),
     default=".",
-    help="Path to Git repo (if not current directory)",
+    help="Path to Git repo, or a URL to clone (e.g. https://github.com/user/repo or git@github.com:user/repo)",
 )
 @click.option(
     "-n",
@@ -180,8 +198,20 @@ def file(
 
     convert_function = compile_convert(convert, imports)
 
-    resolved_filepath = str(Path(filepath).resolve())
-    resolved_repo = str(Path(repo).resolve())
+    # Handle URL-based repos by cloning to a temp directory
+    if is_repo_url(repo):
+        if not silent:
+            click.echo(f"Cloning {repo}...")
+        resolved_repo = clone_repo_url(repo)
+        # For URL repos, filepath should be relative to the repo root
+        resolved_filepath = str(Path(resolved_repo) / filepath)
+    else:
+        resolved_filepath = str(Path(filepath).resolve())
+        resolved_repo = str(Path(repo).resolve())
+
+    # Verify the file exists
+    if not Path(resolved_filepath).exists():
+        raise click.ClickException(f"File not found: {resolved_filepath}")
 
     # In-memory caches of the most recent version and last full hash for each item_id
     item_id_to_version, item_id_to_last_full_hash = get_versions_and_hashes(
