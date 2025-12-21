@@ -1141,3 +1141,227 @@ def test_repo_url_validation():
     assert is_repo_url("/home/user/repo") is False
     assert is_repo_url("~/projects/repo") is False
     assert is_repo_url("relative/path/to/repo") is False
+
+
+def test_csv_encoding_latin1(tmpdir):
+    """Test that --encoding option works with Latin-1 encoded CSV files."""
+    runner = CliRunner()
+    repo_dir = tmpdir / "repo"
+    repo_dir.mkdir()
+
+    # Create a CSV file with Latin-1 encoding containing special characters
+    # \xe9 is 'é' in Latin-1, \xf1 is 'ñ', \xfc is 'ü'
+    latin1_content = b"id,name\n1,Caf\xe9\n2,Espa\xf1ol\n3,\xfcber"
+    (repo_dir / "data.csv").write_binary(latin1_content)
+
+    subprocess.call(["git", "init"], cwd=str(repo_dir))
+    subprocess.call(["git", "add", "data.csv"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "initial"], cwd=str(repo_dir))
+    subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
+
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo_dir / "data.csv"),
+            "--repo",
+            str(repo_dir),
+            "--csv",
+            "--encoding",
+            "latin-1",
+            "--id",
+            "id",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    rows = list(db.query("select id, name from item order by id"))
+    assert rows == [
+        {"id": "1", "name": "Café"},
+        {"id": "2", "name": "Español"},
+        {"id": "3", "name": "über"},
+    ]
+
+
+def test_csv_encoding_iso_8859_1(tmpdir):
+    """Test that --encoding option works with ISO-8859-1 (alias for Latin-1)."""
+    runner = CliRunner()
+    repo_dir = tmpdir / "repo"
+    repo_dir.mkdir()
+
+    # Create a CSV file with ISO-8859-1 encoding
+    iso_content = b"product_id,description\n1,R\xe9sum\xe9\n2,Na\xefve"
+    (repo_dir / "products.csv").write_binary(iso_content)
+
+    subprocess.call(["git", "init"], cwd=str(repo_dir))
+    subprocess.call(["git", "add", "products.csv"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "initial"], cwd=str(repo_dir))
+    subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
+
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo_dir / "products.csv"),
+            "--repo",
+            str(repo_dir),
+            "--csv",
+            "--encoding",
+            "iso-8859-1",
+            "--id",
+            "product_id",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    rows = list(db.query("select product_id, description from item order by product_id"))
+    assert rows == [
+        {"product_id": "1", "description": "Résumé"},
+        {"product_id": "2", "description": "Naïve"},
+    ]
+
+
+def test_csv_encoding_requires_csv_flag(tmpdir):
+    """Test that --encoding requires --csv or --dialect."""
+    runner = CliRunner()
+    repo_dir = tmpdir / "repo"
+    repo_dir.mkdir()
+
+    (repo_dir / "data.json").write_text('{"id": 1}', "utf-8")
+    subprocess.call(["git", "init"], cwd=str(repo_dir))
+    subprocess.call(["git", "add", "data.json"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "initial"], cwd=str(repo_dir))
+    subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
+
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo_dir / "data.json"),
+            "--repo",
+            str(repo_dir),
+            "--encoding",
+            "latin-1",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "--encoding requires --csv or --dialect" in result.output
+
+
+def test_csv_encoding_with_dialect(tmpdir):
+    """Test that --encoding works when used with --dialect instead of --csv."""
+    runner = CliRunner()
+    repo_dir = tmpdir / "repo"
+    repo_dir.mkdir()
+
+    # Create a CSV file with Latin-1 encoding
+    latin1_content = b"id,name\n1,caf\xe9"
+    (repo_dir / "data.csv").write_binary(latin1_content)
+
+    subprocess.call(["git", "init"], cwd=str(repo_dir))
+    subprocess.call(["git", "add", "data.csv"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "initial"], cwd=str(repo_dir))
+    subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
+
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo_dir / "data.csv"),
+            "--repo",
+            str(repo_dir),
+            "--dialect",
+            "excel",
+            "--encoding",
+            "latin-1",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    rows = list(db.query("select id, name from item"))
+    assert rows == [{"id": "1", "name": "café"}]
+
+
+def test_csv_default_encoding_utf8(repo, tmpdir):
+    """Test that the default encoding is UTF-8 (existing behavior)."""
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo / "trees.csv"),
+            "--repo",
+            str(repo),
+            "--csv",
+            "--id",
+            "TreeID",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    rows = list(db.query("select TreeID, name from item order by TreeID"))
+    assert rows == [
+        {"TreeID": "1", "name": "Sophia"},
+        {"TreeID": "2", "name": "Charlie"},
+    ]
+
+
+def test_csv_encoding_utf16(tmpdir):
+    """Test that --encoding works with UTF-16 encoded files."""
+    runner = CliRunner()
+    repo_dir = tmpdir / "repo"
+    repo_dir.mkdir()
+
+    # Create a CSV file with UTF-16 encoding (includes BOM)
+    utf16_content = "id,name\n1,Hello\n2,World".encode("utf-16")
+    (repo_dir / "data.csv").write_binary(utf16_content)
+
+    subprocess.call(["git", "init"], cwd=str(repo_dir))
+    subprocess.call(["git", "add", "data.csv"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "initial"], cwd=str(repo_dir))
+    subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
+
+    db_path = str(tmpdir / "db.db")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(repo_dir / "data.csv"),
+            "--repo",
+            str(repo_dir),
+            "--csv",
+            "--encoding",
+            "utf-16",
+            "--id",
+            "id",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    rows = list(db.query("select id, name from item order by id"))
+    assert rows == [
+        {"id": "1", "name": "Hello"},
+        {"id": "2", "name": "World"},
+    ]

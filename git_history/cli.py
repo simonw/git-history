@@ -110,6 +110,10 @@ def cli():
     help="CSV dialect to use - default is to auto-detect",
 )
 @click.option(
+    "--encoding",
+    help="Character encoding to use when reading CSV files (e.g. latin-1, utf-16). Defaults to utf-8.",
+)
+@click.option(
     "--convert",
     help="Python code to read each file version content and return it as a list of dicts. Defaults to json.loads(content)",
 )
@@ -155,6 +159,7 @@ def file(
     full_versions,
     csv_,
     dialect,
+    encoding,
     convert,
     imports,
     ignore_duplicate_ids,
@@ -165,6 +170,9 @@ def file(
     "Analyze the history of a specific file and write it to SQLite"
     if csv_ and convert:
         raise click.ClickException("Cannot use both --csv and --convert")
+
+    if encoding and not csv_ and not dialect:
+        raise click.ClickException("--encoding requires --csv or --dialect")
 
     if dialect:
         csv_ = True
@@ -190,7 +198,7 @@ def file(
     changed_table = "{}_changed".format(namespace)
 
     if csv_:
-        convert = build_csv_convert_string(dialect)
+        convert = build_csv_convert_string(dialect, encoding)
         imports = ["io", "csv"]
 
     if not convert:
@@ -478,15 +486,17 @@ def get_item(db, item_table, item_id):
         return None
 
 
-def build_csv_convert_string(dialect):
+def build_csv_convert_string(dialect, encoding=None):
+    encoding = encoding or "utf-8"
     return textwrap.dedent(
         """
-        decoded = content.decode("utf-8")
-        dialect = {}
+        decoded = content.decode("{encoding}")
+        dialect = {dialect}
         reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
         return reader
         """.format(
-            '"{}"'.format(dialect) if dialect else "csv.Sniffer().sniff(decoded[:1024])"
+            encoding=encoding,
+            dialect='"{}"'.format(dialect) if dialect else "csv.Sniffer().sniff(decoded[:1024])"
         )
     ).strip()
 
