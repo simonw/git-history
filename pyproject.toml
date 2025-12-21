@@ -1,0 +1,32 @@
+[project]
+name = "git-history"
+version = "0.7a0"
+description = "Tools for analyzing Git history using SQLite"
+readme = "README.md"
+authors = [{name = "Simon Willison"}]
+license = "Apache-2.0"
+requires-python = ">=3.10"
+classifiers = []
+dependencies = [
+    "click",
+    "GitPython",
+    "sqlite-utils>=3.19",
+]
+
+[project.urls]
+Homepage = "https://github.com/simonw/git-history"
+Changelog = "https://github.com/simonw/git-history/releases"
+Issues = "https://github.com/simonw/git-history/issues"
+CI = "https://github.com/simonw/git-history/actions"
+
+[project.scripts]
+git-history = "git_history.cli:cli"
+
+[dependency-groups]
+dev = ["pytest", "cogapp"]
+
+[tool.setuptools]
+packages = ["git_history"]
+
+[tool.uv]
+package = true

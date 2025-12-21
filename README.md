@@ -13,9 +13,14 @@ For background on this project see [git-history: a tool for analyzing scraped da
 
 ## Installation
 
-Install this tool using `pip`:
-
-    $ pip install git-history
+Install this tool using `uv`:
+```bash
+uv tool install git-history
+```
+Or run it without installing it:
+```bash
+uvx git-history --help
+```
 
 ## Demos
 
@@ -54,8 +59,6 @@ Assuming you have a file called `incidents.json` that is a JSON array of objects
 Change directory into the GitHub repository in question and run the following:
 
     git-history file incidents.db incidents.json
-
-### Analyzing a remote repository
 
 You can also analyze a remote Git repository by passing a URL to the `--repo` option. The repository will be cloned to a temporary directory before processing.
 
@@ -402,24 +405,16 @@ This conversion function expects data that looks like this:
 
 ## Development
 
-To contribute to this tool, first checkout the code. Then create a new virtual environment:
-
-    cd git-history
-    python -m venv venv
-    source venv/bin/activate
-
-Or if you are using `pipenv`:
-
-    pipenv shell
-
-Now install the dependencies and test dependencies:
-
-    pip install -e '.[test]'
-
-To run the tests:
-
-    pytest
-
+To contribute to this tool, first checkout the code. You can run the tests using `uv run`:
+```bash
+cd git-history
+uv run pytest
+```
+And run your local development copy of the tool like this
+```bash
+uv run git-history --help
+```
 To update the schema examples in this README file:
-
-    cog -r README.md
+```bash
+uv run cog -r README.md
+```
