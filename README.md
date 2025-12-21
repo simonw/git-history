@@ -55,6 +55,22 @@ Change directory into the GitHub repository in question and run the following:
 
     git-history file incidents.db incidents.json
 
+### Analyzing a remote repository
+
+You can also analyze a remote Git repository by passing a URL to the `--repo` option. The repository will be cloned to a temporary directory before processing.
+
+Using an HTTPS URL:
+
+    git-history file incidents.db incidents.json \
+      --repo https://github.com/example/repo
+
+Using a git SSH URL:
+
+    git-history file incidents.db incidents.json \
+      --repo git@github.com:example/repo
+
+When using a remote URL, the filepath argument should be a relative path within the repository (e.g. `incidents.json` or `data/incidents.json`).
+
 This will create a new SQLite database in the `incidents.db` file with three tables:
 
 - `commits` containing a row for every commit, with a `hash` column, the `commit_at` date and a foreign key to a `namespace`.
@@ -259,7 +275,7 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 
 ### Additional options
 
-- `--repo DIRECTORY` - the path to the Git repository, if it is not the current working directory.
+- `--repo DIRECTORY_OR_URL` - the path to the Git repository, or a URL to clone. If not specified, uses the current working directory. URLs can be HTTPS (e.g. `https://github.com/user/repo`) or SSH (e.g. `git@github.com:user/repo`).
 - `--branch TEXT` - the Git branch to analyze - defaults to `main`.
 - `--id TEXT` - as described above: pass one or more columns that uniquely identify a record, so that changes to that record can be calculated over time.
 - `--full-versions` - instead of recording just the columns that have changed in the `item_version` table record a full copy of each version of theh item.

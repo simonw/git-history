@@ -4,9 +4,12 @@ from git_history.utils import RESERVED
 import itertools
 import json
 import pytest
+import socket
 import subprocess
 import sqlite_utils
+import sys
 import textwrap
+import time
 
 git_commit = [
     "git",
@@ -14,6 +17,8 @@ git_commit = [
     "user.name='Tests'",
     "-c",
     "user.email='actions@users.noreply.github.com'",
+    "-c",
+    "commit.gpgsign=false",
     "commit",
 ]
 
@@ -986,3 +991,153 @@ def test_wal(repo, tmpdir, use_wal):
     db = sqlite_utils.Database(db_path)
     expected_journal_mode = "wal" if use_wal else "delete"
     assert db.journal_mode == expected_journal_mode
+
+
+def get_free_port():
+    """Get a free port number."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+@pytest.fixture
+def git_http_server(tmpdir):
+    """Start a git HTTP server for testing remote repos."""
+    import os
+
+    # Create a test repo
+    repo_dir = tmpdir / "http_repo"
+    repo_dir.mkdir()
+    (repo_dir / "data.json").write_text(
+        json.dumps([{"id": 1, "name": "First"}]),
+        "utf-8",
+    )
+    subprocess.call(["git", "init"], cwd=str(repo_dir))
+    subprocess.call(["git", "add", "data.json"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "initial"], cwd=str(repo_dir))
+    subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
+
+    # Second commit
+    (repo_dir / "data.json").write_text(
+        json.dumps([{"id": 1, "name": "Updated"}, {"id": 2, "name": "Second"}]),
+        "utf-8",
+    )
+    subprocess.call(git_commit + ["-m", "second", "-a"], cwd=str(repo_dir))
+
+    # Update server info for dumb HTTP protocol
+    subprocess.run(["git", "update-server-info"], cwd=str(repo_dir), check=True)
+
+    port = get_free_port()
+    git_http_script = os.path.join(os.path.dirname(__file__), "git_read_only_http.py")
+
+    # Start the HTTP server
+    server_proc = subprocess.Popen(
+        [sys.executable, git_http_script, str(repo_dir), "-p", str(port)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    # Wait for server to be ready
+    for _ in range(50):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect(("localhost", port))
+                break
+        except ConnectionRefusedError:
+            time.sleep(0.1)
+    else:
+        server_proc.terminate()
+        raise RuntimeError("Server failed to start")
+
+    yield {
+        "url": f"http://localhost:{port}/",
+        "repo_dir": repo_dir,
+        "port": port,
+    }
+
+    server_proc.terminate()
+    server_proc.wait()
+
+
+def test_repo_url_http(git_http_server, tmpdir):
+    """Test that --repo can be an HTTP URL."""
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+
+    # The HTTP URL to clone from
+    repo_url = git_http_server["url"]
+
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            "data.json",  # Relative path within the repo
+            "--repo",
+            repo_url,
+            "--id",
+            "id",
+            "--silent",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    assert db["commits"].count == 2
+    versions = list(db.query("select id, name, _version from item_version order by _item, _version"))
+    assert versions == [
+        {"id": 1, "_version": 1, "name": "First"},
+        {"id": None, "_version": 2, "name": "Updated"},
+        {"id": 2, "_version": 1, "name": "Second"},
+    ]
+
+
+def test_repo_url_github_style(git_http_server, tmpdir):
+    """Test that --repo accepts GitHub-style HTTPS URLs."""
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+
+    # Use our local server
+    repo_url = git_http_server["url"]
+
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            "data.json",  # Relative path within the repo
+            "--repo",
+            repo_url,
+            "--silent",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    # Should have processed both commits
+    assert db["commits"].count == 2
+
+
+def test_repo_url_validation():
+    """Test that URL detection works correctly."""
+    from git_history.cli import is_repo_url
+
+    # HTTP/HTTPS URLs
+    assert is_repo_url("https://github.com/simonw/git-history") is True
+    assert is_repo_url("http://github.com/simonw/git-history") is True
+    assert is_repo_url("https://github.com/simonw/git-history.git") is True
+
+    # git@ SSH URLs
+    assert is_repo_url("git@github.com:simonw/git-history") is True
+    assert is_repo_url("git@github.com:simonw/git-history.git") is True
+    assert is_repo_url("git@gitlab.com:user/repo.git") is True
+
+    # Local paths should NOT be detected as URLs
+    assert is_repo_url(".") is False
+    assert is_repo_url("./repo") is False
+    assert is_repo_url("/home/user/repo") is False
+    assert is_repo_url("~/projects/repo") is False
+    assert is_repo_url("relative/path/to/repo") is False
