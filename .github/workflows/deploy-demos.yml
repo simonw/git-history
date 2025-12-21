@@ -13,21 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Check out repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
     - name: Check out simonw/ca-fires-history
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         repository: simonw/ca-fires-history
         path: ca-fires-history
     - name: Check out simonw/pge-outages
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         repository: simonw/pge-outages
         path: pge-outages
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
-        python-version: "3.9"
+        python-version: "3.10"
         cache: pip
     - name: Install Python dependencies
       run: |
