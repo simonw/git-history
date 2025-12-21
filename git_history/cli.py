@@ -214,8 +214,8 @@ def file(
         # For URL repos, filepath should be relative to the repo root
         resolved_filepath = str(Path(resolved_repo) / filepath)
     else:
-        resolved_filepath = str(Path(filepath).resolve())
         resolved_repo = str(Path(repo).resolve())
+        resolved_filepath = str(Path(resolved_repo) / filepath)
 
     # Verify the file exists
     if not Path(resolved_filepath).exists():
@@ -496,7 +496,11 @@ def build_csv_convert_string(dialect, encoding=None):
         return reader
         """.format(
             encoding=encoding,
-            dialect='"{}"'.format(dialect) if dialect else "csv.Sniffer().sniff(decoded[:1024])"
+            dialect=(
+                '"{}"'.format(dialect)
+                if dialect
+                else "csv.Sniffer().sniff(decoded[:1024])"
+            ),
         )
     ).strip()
 

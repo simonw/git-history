@@ -1086,7 +1086,9 @@ def test_repo_url_http(git_http_server, tmpdir):
 
     db = sqlite_utils.Database(db_path)
     assert db["commits"].count == 2
-    versions = list(db.query("select id, name, _version from item_version order by _item, _version"))
+    versions = list(
+        db.query("select id, name, _version from item_version order by _item, _version")
+    )
     assert versions == [
         {"id": 1, "_version": 1, "name": "First"},
         {"id": None, "_version": 2, "name": "Updated"},
@@ -1222,7 +1224,9 @@ def test_csv_encoding_iso_8859_1(tmpdir):
     assert result.exit_code == 0
 
     db = sqlite_utils.Database(db_path)
-    rows = list(db.query("select product_id, description from item order by product_id"))
+    rows = list(
+        db.query("select product_id, description from item order by product_id")
+    )
     assert rows == [
         {"product_id": "1", "description": "Résumé"},
         {"product_id": "2", "description": "Naïve"},
@@ -1364,4 +1368,44 @@ def test_csv_encoding_utf16(tmpdir):
     assert rows == [
         {"id": "1", "name": "Hello"},
         {"id": "2", "name": "World"},
+    ]
+
+
+def test_local_repo_with_relative_filepath(tmpdir):
+    """Test that --repo with a local path resolves filepath relative to the repo."""
+    # Create a repo with a CSV file
+    repo_dir = tmpdir / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "data.csv").write_text("id,name\n1,Alice\n2,Bob", "utf-8")
+    subprocess.call(["git", "init"], cwd=str(repo_dir))
+    subprocess.call(["git", "add", "data.csv"], cwd=str(repo_dir))
+    subprocess.call(git_commit + ["-m", "initial"], cwd=str(repo_dir))
+    subprocess.call(["git", "branch", "-m", "main"], cwd=str(repo_dir))
+
+    # Run from an isolated filesystem (different working directory)
+    # using --repo with a local path and a relative filepath
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            [
+                "file",
+                db_path,
+                "data.csv",  # Relative filepath - should be resolved relative to --repo
+                "--repo",
+                str(repo_dir),
+                "--csv",
+                "--id",
+                "id",
+            ],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+
+    db = sqlite_utils.Database(db_path)
+    rows = list(db.query("select id, name from item order by id"))
+    assert rows == [
+        {"id": "1", "name": "Alice"},
+        {"id": "2", "name": "Bob"},
     ]
