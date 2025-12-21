@@ -282,6 +282,7 @@ If you have a column with a name such as `_commit_` it will be renamed too, addi
 - `--ignore TEXT` - one or more columns to ignore - they will not be included in the resulting database.
 - `--csv` - treat the data is CSV or TSV rather than JSON, and attempt to guess the correct dialect
 - `--dialect` - use a spcific CSV dialect. Options are `excel`, `excel-tab` and `unix` - see [the Python CSV documentation](https://docs.python.org/3/library/csv.html#csv.excel) for details.
+- `--encoding` - character encoding to use when reading CSV files. Defaults to `utf-8`. Use this for files encoded in other formats such as `latin-1` or `utf-16`.
 - `--skip TEXT` - one or more full Git commit hashes that should be skipped. You can use this if some of the data in your revision history is corrupted in a way that prevents this tool from working.
 - `--start-at TEXT` - skip commits prior to the specified commit hash.
 - `--start-after TEXT` - skip commits up to and including the specified commit hash, then start processing from the following commit.
