@@ -1,6 +1,6 @@
 [project]
 name = "git-history"
-version = "0.7a0"
+version = "0.8"
 description = "Tools for analyzing Git history using SQLite"
 readme = "README.md"
 authors = [{name = "Simon Willison"}]
