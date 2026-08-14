@@ -381,6 +381,7 @@ def file(
                                 _item=item_pk,
                                 _version=version,
                                 _commit=commit_pk,
+                                _item_full_hash=item_full_hash,
                             )
                         else:
                             # Only record the columns that have changed
@@ -586,19 +587,31 @@ def get_commit_hashes(db, namespace):
 def get_versions_and_hashes(db, namespace):
     item_id_to_version = {}
     item_id_to_last_full_hash = {}
-    if db[namespace + "_version"].exists():
+    version_table = db[namespace + "_version"]
+    if version_table.exists():
+        # --full-versions used to omit _item_full_hash, so older databases
+        # may not have the column. Query it only when present (#60).
+        has_full_hash = "_item_full_hash" in version_table.columns_dict
+        hash_select = (
+            "{namespace}_version._item_full_hash as item_full_hash".format(
+                namespace=namespace
+            )
+            if has_full_hash
+            else "null as item_full_hash"
+        )
         sql = """
         select
             {namespace}._item_id as item_id,
             max({namespace}_version._version) as max_version,
-            {namespace}_version._item_full_hash as item_full_hash
+            {hash_select}
         from
             {namespace}_version
             join {namespace} on {namespace}_version._item = {namespace}._id
         group by
             _item_id
         """.format(
-            namespace=namespace
+            namespace=namespace,
+            hash_select=hash_select,
         )
         for row in db.query(sql):
             item_id_to_version[row["item_id"]] = row["max_version"]

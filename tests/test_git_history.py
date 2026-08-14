@@ -583,7 +583,8 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
         + "   [_version] INTEGER,\n"
         "   [_commit] INTEGER REFERENCES [commits]([id]),\n"
         "   [product_id] INTEGER,\n"
-        "   [name] TEXT\n"
+        "   [name] TEXT,\n"
+        "   [_item_full_hash] TEXT\n"
         ");\n"
         + expected_create_view(namespace or "item")
         + "\nCREATE INDEX [idx_{}__item]\n".format(version_table)
@@ -603,6 +604,45 @@ def test_file_with_id_full_versions(repo, tmpdir, namespace):
         {"product_id": 2, "_version": 2, "name": "Tonic 2"},
         {"product_id": 3, "_version": 1, "name": "Rum"},
     ]
+
+
+def test_file_with_id_full_versions_can_run_twice(repo, tmpdir):
+    # Regression for #60: a second --full-versions run queried
+    # item_version._item_full_hash, which that mode never stored.
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    args = [
+        "file",
+        db_path,
+        str(repo / "items.json"),
+        "--repo",
+        str(repo),
+        "--id",
+        "product_id",
+        "--full-versions",
+    ]
+    with runner.isolated_filesystem():
+        first = runner.invoke(cli, args, catch_exceptions=False)
+        assert first.exit_code == 0
+        second = runner.invoke(cli, args, catch_exceptions=False)
+        assert second.exit_code == 0
+    db = sqlite_utils.Database(db_path)
+    assert db["item_version"].count == 4
+    assert "_item_full_hash" in db["item_version"].columns_dict
+
+
+def test_get_versions_and_hashes_without_full_hash_column(tmpdir):
+    from git_history.cli import get_versions_and_hashes
+
+    db = sqlite_utils.Database(str(tmpdir / "legacy.db"))
+    db["item"].insert({"_id": 1, "_item_id": "abc"}, pk="_id")
+    db["item_version"].insert(
+        {"_id": 1, "_item": 1, "_version": 2, "_commit": 1, "name": "Gin"},
+        pk="_id",
+    )
+    versions, hashes = get_versions_and_hashes(db, "item")
+    assert versions == {"abc": 2}
+    assert hashes == {"abc": None}
 
 
 def test_file_with_reserved_columns(repo, tmpdir):
@@ -657,7 +697,8 @@ def test_file_with_reserved_columns(repo, tmpdir):
            [_item_] TEXT,
            [_version_] TEXT,
            [_commit_] TEXT,
-           [rowid_] INTEGER
+           [rowid_] INTEGER,
+           [_item_full_hash] TEXT
         );"""
         )
         + "\n"
@@ -757,7 +798,8 @@ def test_csv_tsv(repo, tmpdir, file):
            [_version] INTEGER,
            [_commit] INTEGER REFERENCES [commits]([id]),
            [TreeID] TEXT,
-           [name] TEXT
+           [name] TEXT,
+           [_item_full_hash] TEXT
         );"""
         ).strip()
         + "\n"
