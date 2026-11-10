@@ -221,6 +221,16 @@ def file(
     if not Path(resolved_filepath).exists():
         raise click.ClickException(f"File not found: {resolved_filepath}")
 
+    # The file must live inside the repo: git only tracks repo-relative
+    # paths, and anything else crashes iterate_file_versions with a
+    # ValueError traceback
+    try:
+        Path(resolved_filepath).relative_to(resolved_repo)
+    except ValueError:
+        raise click.ClickException(
+            f"File is not inside the repository: {resolved_filepath}"
+        )
+
     # In-memory caches of the most recent version and last full hash for each item_id
     item_id_to_version, item_id_to_last_full_hash = get_versions_and_hashes(
         db, namespace

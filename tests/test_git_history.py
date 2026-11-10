@@ -1300,6 +1300,29 @@ def test_csv_encoding_with_dialect(tmpdir):
     assert rows == [{"id": "1", "name": "café"}]
 
 
+def test_filepath_outside_repo_is_clean_error(repo, tmpdir):
+    """An absolute filepath outside --repo is a clean error, not a traceback."""
+    runner = CliRunner()
+    db_path = str(tmpdir / "db.db")
+    outside = tmpdir / "outside.json"
+    outside.write_text(json.dumps([{"id": 1}]), "utf-8")
+    result = runner.invoke(
+        cli,
+        [
+            "file",
+            db_path,
+            str(outside),
+            "--repo",
+            str(repo),
+            "--id",
+            "id",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "is not inside the repository" in result.output
+    assert "ValueError" not in result.output
+
+
 def test_csv_default_encoding_utf8(repo, tmpdir):
     """Test that the default encoding is UTF-8 (existing behavior)."""
     runner = CliRunner()
